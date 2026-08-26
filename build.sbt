@@ -36,9 +36,10 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all"
 )
 
-// Every module below core is still a bare `package.scala`. An empty compilation
-// unit carries no dependency information, which the compiler warns about and CI
-// turns into an error — silence it until the module grows its first definition.
+// fs2, scodec, jsoniter, borer and scalapb are still a bare `package.scala`. An
+// empty compilation unit carries no dependency information, which the compiler
+// warns about and CI turns into an error — silence it until the module grows
+// its first definition.
 lazy val stubSettings = Seq(
   scalacOptions += "-Wconf:msg=defined in the compilation unit:s"
 )
@@ -156,7 +157,6 @@ lazy val laws = project
   .dependsOn(core)
   .settings(
     name := "b8-laws",
-    stubSettings,
     // The law suites are the artifact here, so munit and scalacheck are part of
     // the published compile-scope API rather than test-only dependencies.
     libraryDependencies ++= Seq(
