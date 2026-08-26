@@ -28,14 +28,17 @@ import b8.laws.Flat
 
 import java.nio.charset.StandardCharsets.UTF_8
 
+import scala.annotation.nowarn
+
 import io.circe.Printer
 
 /** Two backends in one scope: circe for JSON, borer for CBOR.
   *
   * This is what the `b8.borer.cbor` and `b8.borer.json` sub-packages exist for.
-  * The aggregate `b8.borer` bridge serves both formats and therefore cannot
-  * share a scope with a JSON bridge from somewhere else; taking only
-  * `b8.borer.cbor` leaves JSON free for circe.
+  * The aggregate `b8.borer` bridge answers for both formats, so putting it next
+  * to a JSON bridge from somewhere else leaves the two of them arguing over
+  * `Format.Json` — quietly, as the last test here shows. Taking only
+  * `b8.borer.cbor` leaves JSON to circe and says so.
   *
   * The package is `b8.mixing` and not `b8.borer` on purpose. A suite written
   * under `b8.borer` would have that package's six givens as members of its own
@@ -83,9 +86,42 @@ class MixingSuite extends munit.FunSuite:
     assert(Fixtures.flat1.encode[Format.Json].sameElements(expected))
   }
 
-  // Swapping the CBOR import for the aggregate `import b8.borer.given` would
-  // break this file: borer would offer a `Codec[Flat, Format.Json]` next to
-  // circe's, neither of the two more specific than the other, and the summon
-  // in the first test would stop compiling. The aggregate import and the
-  // per-format ones are alternatives, not layers — a scope takes one shape or
-  // the other, never both.
+  /** What the aggregate import would have done instead, pinned here because it
+    * is the reason to prefer the per-format one and it is invisible otherwise.
+    *
+    * `import b8.borer.given` offers a `Codec[Flat, Format.Json]` of its own.
+    * That does not clash with circe's — every one of these givens is anonymous
+    * and they all end up with the same synthesised name, so the second import
+    * shadows the first instead of competing with it. Both objects below
+    * compile, and which backend answers for JSON is decided by which import is
+    * written last.
+    *
+    * The `@nowarn` is the interesting part. Without it both objects raise
+    * `unused import`, and the import the compiler names is the shadowed one —
+    * `b8.borer.given` in the first, `b8.circe.given` in the second. So under
+    * `-Wunused:all`, which this build turns on everywhere, the shadowing is not
+    * silent after all. It is silent for everyone who does not.
+    */
+  @nowarn("msg=unused import")
+  private object borerThenCirce:
+    import b8.borer.given
+    import b8.circe.given
+
+    def json: Codec[Flat, Format.Json] = summon
+
+  @nowarn("msg=unused import")
+  private object circeThenBorer:
+    import b8.circe.given
+    import b8.borer.given
+
+    def json: Codec[Flat, Format.Json] = summon
+
+  test(
+    "the aggregate import next to another backend is decided by import order"
+  ) {
+    assert(borerThenCirce.json.isInstanceOf[CirceCodec[?]])
+    assert(circeThenBorer.json.isInstanceOf[b8.borer.json.JsonCodec[?]])
+    // Two import lines, swapped, two different wire formats — and the only
+    // trace is an "unused import" on the line that lost.
+    // `import b8.borer.cbor.given` is the line that cannot do this to you.
+  }

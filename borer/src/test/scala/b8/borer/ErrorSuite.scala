@@ -137,6 +137,27 @@ class ErrorSuite extends munit.FunSuite:
     assert((asCbor :+ 0xff.toByte).decodeAs[Row, Format.Cbor].isLeft)
   }
 
+  test("an exception from a decoder arrives as a DecodeError, not as itself") {
+    // Pinned because it is the opposite of what a reader would expect from
+    // "only Borer.Error is wrapped", and because b8 cannot change it. borer's
+    // decoding DSL catches every non-fatal exception itself and re-throws it
+    // as a `Borer.Error.General`, so by the time the bridge's catch runs the
+    // exception is already a borer error. What b8 can promise is that the
+    // original survives: it sits one link further down the cause chain.
+    val e = summon[b8.Decoder[Boom, Format.Cbor]]
+      .decode(b8.ByteSource(Array[Byte](1))) match
+      case Left(err) => err
+      case Right(a)  => fail(s"expected a rejection, got $a")
+
+    assertEquals(e.format, "Cbor")
+    assert(e.getCause.isInstanceOf[Borer.Error[?]], e.getCause)
+    assert(
+      e.getCause.getCause.isInstanceOf[IllegalStateException],
+      e.getCause.getCause
+    )
+    assert(clue(e.message).contains("boom from a decoder"))
+  }
+
   private def positionCount(message: String): Int =
     val marker = "input position"
     message.sliding(marker.length).count(_ == marker)
@@ -146,3 +167,12 @@ final case class Row(id: Long, label: String)
 
 object Row:
   given io.bullet.borer.Codec[Row] = deriveCodec
+
+/** A type whose decoder is a bug: it raises on any input at all. */
+final case class Boom(n: Int)
+
+object Boom:
+  given io.bullet.borer.Decoder[Boom] =
+    io.bullet.borer.Decoder { (_: io.bullet.borer.Reader) =>
+      throw new IllegalStateException("boom from a decoder")
+    }

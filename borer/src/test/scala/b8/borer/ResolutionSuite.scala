@@ -55,12 +55,16 @@ class ResolutionSuite extends munit.FunSuite:
     import b8.borer.cbor.given
 
     def codec: Codec[WriteAndRead, Format.Cbor] = summon
+    def encoder: Encoder[WriteOnly, Format.Cbor] = summon
+    def decoder: Decoder[ReadOnly, Format.Cbor] = summon
 
   /** The same for JSON, in a scope of its own. */
   private object jsonOnly:
     import b8.borer.json.given
 
     def codec: Codec[WriteAndRead, Format.Json] = summon
+    def encoder: Encoder[WriteOnly, Format.Json] = summon
+    def decoder: Decoder[ReadOnly, Format.Json] = summon
 
   test("both directions resolve, and both come from the codec given") {
     // Stronger than "all three resolve": the encoder and the decoder are the
@@ -162,9 +166,16 @@ class ResolutionSuite extends munit.FunSuite:
   test("one sub-package import is enough on its own") {
     // The aggregate import is a convenience, not the only way in: a caller who
     // wants borer for one format only imports that half, and gets the same
-    // bridge class the aggregate would have handed out.
+    // bridge class the aggregate would have handed out. All three givens of
+    // each sub-package are summoned here, not just the codec, because the
+    // `NotGiven` guards are per package and the aggregate's copies of them
+    // would otherwise be the only ones any test ever resolves.
     assert(cborOnly.codec.isInstanceOf[cbor.CborCodec[?]])
+    assert(cborOnly.encoder.isInstanceOf[cbor.CborEncoder[?]])
+    assert(cborOnly.decoder.isInstanceOf[cbor.CborDecoder[?]])
     assert(jsonOnly.codec.isInstanceOf[json.JsonCodec[?]])
+    assert(jsonOnly.encoder.isInstanceOf[json.JsonEncoder[?]])
+    assert(jsonOnly.decoder.isInstanceOf[json.JsonDecoder[?]])
   }
 
 /** borer can write this one and read it back. */

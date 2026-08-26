@@ -114,7 +114,14 @@ private[borer] final class SinkOutput(sink: ArraySink) extends Output:
 
   def result(): Unit = ()
 
-object SinkOutput:
+  /** borer appends the `Output` to the message of an encode-side error, so this
+    * is the tail of what a user reads when one is raised. The default would
+    * name the class and an identity hash and say nothing about the encode; the
+    * write position is the one number that helps.
+    */
+  override def toString: String = s"b8 ArraySink at ${sink.position}"
+
+private[borer] object SinkOutput:
 
   /** The adapter for `out`: the fast path where the sink has an array to write
     * into, the forwarding one everywhere else.

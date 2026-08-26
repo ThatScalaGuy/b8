@@ -37,11 +37,21 @@ import scala.util.NotGiven
   *   - `import b8.borer.cbor.given` — CBOR only
   *   - `import b8.borer.json.given` — JSON only
   *
-  * Never combine `b8.borer.given` with one of the sub-packages in the same
-  * scope: both would offer a `Codec[A, Format.Cbor]`, and the summon becomes
-  * ambiguous. The sub-packages exist so that the two formats can be sourced
-  * from different backends — borer for CBOR next to another bridge for JSON —
-  * which is exactly the case the aggregate import cannot serve.
+  * Take one of them, not two. Combining `b8.borer.given` with a sub-package, or
+  * with another backend's bridge, does not fail to compile — and that is the
+  * problem. Every one of these givens is anonymous, so they all carry the same
+  * synthesised name, and a second import of that name shadows the first rather
+  * than competing with it. `import b8.borer.given` above
+  * `import b8.circe.given` leaves circe answering for `Format.Json`; the two
+  * lines the other way round leaves borer answering. Import order is not where
+  * a wire format should be decided. The only hint is that under `-Wunused:all`
+  * the compiler calls the shadowed import unused, which is worth recognising as
+  * the symptom rather than deleting the line it names.
+  *
+  * That is what the sub-packages are for. Two formats from two backends is a
+  * reasonable thing to want — borer for CBOR next to another bridge for JSON —
+  * and `import b8.borer.cbor.given` asks for exactly that, in a line that means
+  * the same thing wherever it sits in the file.
   *
   * Every given here is a call into `b8.borer.cbor` or `b8.borer.json`. The
   * configuration factories live there too, and there are no forwarders for them

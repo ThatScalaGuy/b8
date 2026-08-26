@@ -66,3 +66,9 @@ private[borer] final class GenericSinkOutput(sink: ByteSink) extends Output:
     this
 
   def result(): Unit = ()
+
+  /** borer appends the `Output` to the message of an encode-side error. This
+    * sink has no position to report, so the class of the sink is what there is
+    * to say.
+    */
+  override def toString: String = s"b8 ${sink.getClass.getSimpleName}"

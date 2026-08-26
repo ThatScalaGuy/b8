@@ -55,10 +55,18 @@ object CborDecoder:
     * `toArray` appears in neither branch: copying the input to decode it is the
     * thing this bridge exists to avoid.
     *
-    * Only `Borer.Error` is wrapped. Anything else — a bug in a hand-written
-    * borer decoder, say — surfaces as itself rather than being reported as
-    * malformed input. borer's message already ends in `(input position N)`, so
-    * the position is not appended a second time.
+    * Only `Borer.Error` is caught, and it is worth being precise about how
+    * little that excludes. borer's own decoding DSL catches every non-fatal
+    * exception first and re-throws it as a `Borer.Error.General`, so a bug in a
+    * hand-written borer decoder arrives here already dressed as a borer error
+    * and does become a `DecodeError` — with the original exception two links
+    * down the cause chain. That is borer's decision, not the bridge's, and
+    * undoing it would mean unwrapping `General` and guessing which of its
+    * causes were really malformed input. What still propagates untouched is
+    * everything `NonFatal` does not cover: `StackOverflowError` and the rest.
+    *
+    * borer's message already ends in `(input position N)`, so the position is
+    * not appended a second time.
     */
   private[cbor] def decodeUnsafe[A](
       in: ByteSource,

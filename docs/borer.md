@@ -78,13 +78,31 @@ There are three ways in, and they are alternatives rather than layers:
 - `import b8.borer.cbor.given` — CBOR only, three givens
 - `import b8.borer.json.given` — JSON only, three givens
 
-Never combine the aggregate with one of the sub-packages in the same scope. Both offer a
-`Codec[A, Format.Cbor]`, and the summon becomes ambiguous — the compiler cannot know that the two are the
-same definition reached by two paths.
+Take one of them, and not two. Combining the aggregate with a sub-package, or with another backend's
+bridge, compiles cleanly — and that is exactly what makes it a bad idea. Every one of these givens is
+anonymous, so they all carry the same name the compiler made up for them, and importing that name a second
+time shadows the first rather than competing with it. So this:
 
-The sub-packages are not there to save an import. They exist so that the two formats can come from
-different backends: `import b8.borer.cbor.given` next to another bridge's JSON given is a scope where CBOR
-is borer's and JSON is somebody else's. That is the one arrangement the aggregate import cannot serve.
+```scala
+import b8.borer.given
+import b8.circe.given
+```
+
+leaves **circe** answering for `Format.Json`, and the same two lines in the other order leave **borer**
+answering. A different wire format, decided by the order of two import lines — which is the kind of thing
+an editor reorders on save. There is one thread to pull if it happens to you: under `-Wunused:all` the
+compiler reports the *shadowed* import as unused, so `unused import: b8.borer.given` on a line you are
+certain you need is the symptom. Without that flag there is no diagnostic at all.
+
+That is what the sub-packages are for. Two formats from two backends is a reasonable thing to want, and
+
+```scala
+import b8.borer.cbor.given
+import b8.circe.given
+```
+
+asks for it in a line that means the same thing wherever it sits in the file: CBOR is borer's, JSON is
+circe's, and nothing else was implied.
 
 ## Configuration
 
@@ -116,9 +134,16 @@ Two of those need a word, because they do not mean here quite what borer's own d
 `Output` it writes into. The bridge never lets borer allocate that buffer — the `Output` is the sink — so
 the number would otherwise be dead. Reading it as the initial capacity of the sink keeps it meaningful and
 keeps its meaning close to the original: it is still "how much room do you expect this to need". For the
-same reason `allowBufferCaching` is inert on the encode side. borer's buffer caches sit behind the
-allocation that never happens, so they are never reached, and that is what "no hidden pooling" means for
-this bridge.
+same reason `allowBufferCaching` is inert on the encode side: borer's byte-buffer caches sit behind the
+allocation that never happens, so nothing the bridge does can reach them.
+
+Decoding is a different matter, and the honest version is worth stating. `Json.DecodingConfig` also carries
+`allowBufferCaching`, defaulting to `true`, and there it is *not* inert — borer's JSON parser takes its
+char buffer from a process-wide cache and hands it back when the decode ends. The bridge leaves that alone
+rather than switching it off, so a b8 JSON decode behaves exactly like the plain borer call it wraps.
+b8's own promise not to pool is about b8's buffers, the ones `SinkPool` hands out; borer's internals stay
+borer's, and `b8.borer.json.decoder[A](defaultDecodingConfig.copy(allowBufferCaching = false))` turns this
+one off if you would rather it were.
 
 **One default is not borer's.** `b8.borer.json`'s decoding config raises `maxNumberAbsExponent` from 64 to
 999. borer's cap is a fine guard against a stranger sending a megabyte of digits, but it is lower than what
@@ -212,12 +237,18 @@ Malformed input becomes b8's single error type, `DecodeError`, with `format` set
 and borer's own `Borer.Error` kept as the cause. The message is borer's, quoted unchanged: it already ends
 in `(input position N)`, so b8 appends no position of its own and never has two of them to keep in sync.
 
-Only `Borer.Error` is wrapped, and only on the decode side. A bug in a hand-written borer decoder surfaces
-as itself instead of being reported as malformed input. And encoding stays total in b8's sense: a failure
-the backend cannot avoid — a `ByteBufferSink` that runs out of room — comes out as its own
-`java.nio.BufferOverflowException`. That is the reason the bridge encodes through `Cbor.writer(…)` instead
-of borer's `Cbor.encode(x).to(…)` DSL; the DSL catches every `NonFatal` and would rewrite that overflow
-into a borer error.
+Only `Borer.Error` is caught, and only on the decode side — but be careful about what that leaves out,
+because it is less than it sounds. borer's decoding DSL catches every non-fatal exception itself and
+re-throws it as a `Borer.Error.General` before b8 sees it, so a bug in a hand-written borer decoder does
+come back as a `DecodeError`, with the exception it really was two links down the cause chain. b8 does not
+unpick that: telling a genuine bug apart from a decoder that raises on input it dislikes is a judgement b8
+has no way to make. What still comes through untouched is what `NonFatal` does not cover — a
+`StackOverflowError` from a runaway recursive decoder stays a `StackOverflowError`.
+
+Encoding, on the other hand, stays total in b8's sense: a failure the backend cannot avoid — a
+`ByteBufferSink` that runs out of room — comes out as its own `java.nio.BufferOverflowException`. That is
+the reason the bridge encodes through `Cbor.writer(…)` instead of borer's `Cbor.encode(x).to(…)` DSL; the
+DSL catches every `NonFatal` on that side too and would rewrite the overflow into a borer error.
 
 ```scala mdoc:silent
 def whyJson(s: String): String =
@@ -278,8 +309,9 @@ are the ones worth knowing before the first message goes out:
   available through `import io.bullet.borer.NullOptions.given`, which is a choice about the wire and
   therefore borer's to offer, not b8's.
 - **`Map`** becomes a CBOR map or a JSON object. CBOR takes any data item as a key; JSON does not, so a
-  `Map[Int, A]` encodes fine as CBOR and fails as JSON with borer's "the JSON renderer doesn't support …
-  as a map key".
+  `Map[Int, A]` encodes fine as CBOR and fails as JSON with borer's "JSON does not support integer values
+  as a map key". This is the one place where "one codec, two formats" does not hold, and it shows up when
+  the value is encoded rather than when the codec is summoned.
 - **Case classes and enums**, with `MapBasedCodecs`: a case class is a map of its field names. A Scala 3
   enum whose cases carry no data derives to a plain string. One whose cases carry data derives to a
   single-entry map keyed by the case name, and needs `deriveAllCodecs` rather than `deriveCodec`, because
