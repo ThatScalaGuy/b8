@@ -53,6 +53,7 @@ All AI-generated documents and code are reviewed by the maintainer before they a
 | **Scala**      | 3.3.8 (Scala 3.3 **LTS**)           |
 | **JDK**        | 11, 17, 21, 25 — **minimum JDK 11** |
 | **FS2**        | 3.13.x (`b8-fs2` only)              |
+| **borer**      | 1.17.x (`b8-borer` only)            |
 | **scodec-bits** | 1.2.x (`b8-scodec` only)           |
 
 > `b8-core` has no library dependencies at all. Every other module pulls in exactly one backend, so you
@@ -188,7 +189,7 @@ b8
 | `b8-laws`        | `b8.laws`               | the shared suite every backend must pass, plus the fixtures it runs on  | ✅ implemented                |
 | `b8-circe`       | `b8.circe`              | circe behind `Format.Json`                                              | ✅ implemented — [docs](docs/circe.md) |
 | `b8-jsoniter`    | `b8.jsoniter`           | jsoniter-scala behind `Format.Json`                                     | 🚧 stub                       |
-| `b8-borer`       | `b8.borer`              | borer behind `Format.Cbor` and `Format.Json`                            | 🚧 stub                       |
+| `b8-borer`       | `b8.borer`              | borer behind `Format.Cbor` and `Format.Json`                            | ✅ implemented — [docs](docs/borer.md) |
 | `b8-scalapb`     | `b8.scalapb`            | ScalaPB behind `Format.Proto`                                           | 🚧 stub                       |
 | `b8-fs2`         | `b8.chunk`, `b8.stream` | `fs2.Chunk[Byte]` as a container, plus encode/decode pipes and framing   | 🚧 stub                       |
 | `b8-scodec`      | `b8.vector`             | `scodec.bits.ByteVector` as a container                                 | 🚧 stub                       |

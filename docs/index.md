@@ -29,8 +29,9 @@ one-line diff. And because the container is a package, `Array[Byte]`, `fs2.Chunk
 
 ## Getting started
 
-`b8-core` and the [circe bridge](circe.md) exist today; the other backends are in progress. The core module
-has no dependencies at all, so it never pulls a JSON parser into a module that does not want one.
+`b8-core`, the [circe bridge](circe.md) and the [borer bridge](borer.md) exist today; the other backends are
+in progress. The core module has no dependencies at all, so it never pulls a JSON parser into a module that
+does not want one.
 
 ```scala
 libraryDependencies += "de.thatscalaguy" %% "b8-core" % "0.1.0"
@@ -124,8 +125,8 @@ instead of being pinned to the thread for the rest of its life.
 | `b8-scalapb`    | `b8.scalapb`           | ScalaPB behind `Format.Proto`                                      |
 | `b8-laws`       | `b8.laws`              | the shared suite every backend must pass                           |
 
-`b8-core`, `b8-laws` and `b8-circe` are implemented today; the [circe bridge](circe.md) has a page of its
-own. Everything else is a stub for now.
+`b8-core`, `b8-laws`, `b8-circe` and `b8-borer` are implemented today; the [circe bridge](circe.md) and the
+[borer bridge](borer.md) have a page each. Everything else is a stub for now.
 
 ## Defining your own format
 
