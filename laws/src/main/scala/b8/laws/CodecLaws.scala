@@ -85,14 +85,34 @@ object CodecLaws:
         codec.encodeTo(a, OutputStreamSink(os))
         os.toByteArray
 
-      private def sameResult(
-          x: Either[DecodeError, A],
-          y: Either[DecodeError, A]
-      ): Boolean =
-        (x, y) match
-          case (Right(a), Right(b)) => equal(a, b)
-          case (Left(_), Left(_))   => true
-          case _                    => false
+      /** Bytes already in a sink before the encoder is handed it. */
+      private val used: Array[Byte] = Array[Byte](1, 2, 3)
+
+      /** Encoding into a sink that is not empty.
+        *
+        * A sink is append-only: the message belongs at `position`, and what was
+        * there before has to survive. An encoder that writes to `buffer(0)`
+        * instead of `buffer(position)` — the natural slip once it has the
+        * `ArraySink` fast path in hand — passes every check that only ever
+        * hands it a fresh sink, which is what framing code does not do.
+        */
+      private def viaUsedArraySink(a: A): Array[Byte] =
+        val sink = ArraySink(1)
+        sink.write(used)
+        codec.encodeTo(a, sink)
+        sink.result()
+
+      /** The same question for `ByteBufferSink`, which also starts where the
+        * buffer's position happens to be.
+        */
+      private def viaUsedByteBufferSink(a: A, size: Int): Array[Byte] =
+        val bb = ByteBuffer.allocate(used.length + size)
+        bb.put(used)
+        codec.encodeTo(a, ByteBufferSink(bb))
+        bb.flip()
+        val out = new Array[Byte](bb.remaining())
+        bb.get(out)
+        out
 
       // What a codec is for. Breaks when the encoder drops a field the decoder
       // expects, or when either side disagrees about the character encoding.
@@ -109,14 +129,18 @@ object CodecLaws:
         codec.encode(a).sameElements(codec.encode(a))
       }
 
-      // Where the bytes go must not change what the bytes are. Breaks when the
-      // encoder writes straight into `ArraySink.buffer` and ignores `position`,
-      // or when it takes the array fast path for one sink and the byte-at-a-
-      // time path for another.
+      // Where the bytes go must not change what the bytes are, and a sink that
+      // already holds something must keep it. Breaks when the encoder writes
+      // straight into `ArraySink.buffer` and ignores `position`, or when it
+      // takes the array fast path for one sink and the byte-at-a-time path for
+      // another.
       property("sinkIndependence") = forAll { (a: A) =>
         val expected = viaArraySink(a)
+        val appended = used ++ expected
         expected.sameElements(viaByteBufferSink(a, expected.length)) &&
-        expected.sameElements(viaOutputStreamSink(a))
+        expected.sameElements(viaOutputStreamSink(a)) &&
+        appended.sameElements(viaUsedArraySink(a)) &&
+        appended.sameElements(viaUsedByteBufferSink(a, expected.length))
       }
 
       // A `ByteSource` is a window into somebody else's array: the same bytes
@@ -124,6 +148,10 @@ object CodecLaws:
       // offset 0. Breaks whenever a decoder passes `in.array` on without
       // `in.offset` and `in.length` — which happens to work for every test that
       // only ever decodes freshly allocated arrays.
+      //
+      // All three have to succeed, not merely agree: a codec that rejects its
+      // own output fails all three the same way, and "agreement" alone would
+      // call that a pass.
       property("sourceIndependence") = forAll {
         (a: A, prefix: Array[Byte], suffix: Array[Byte]) =>
           val bytes = codec.encode(a)
@@ -137,7 +165,9 @@ object CodecLaws:
             codec.decode(
               ByteSource(ByteBuffer.wrap(padded, head.length, bytes.length))
             )
-          sameResult(direct, windowed) && sameResult(direct, buffered)
+          (direct, windowed, buffered) match
+            case (Right(x), Right(y), Right(z)) => equal(x, y) && equal(x, z)
+            case _                              => false
       }
 
       // A decoder consumes the whole source: bytes left over are malformed
@@ -161,8 +191,9 @@ object CodecLaws:
 
       // From the second sample on, the pooled sink is one that has already been
       // written to and reset. Breaks on encoders that assume a fresh zeroed
-      // array, that write at index 0 instead of the sink's position, or that
-      // hold on to the sink after `encode` returned.
+      // array, or that hold on to the sink after `encode` returned. Not on ones
+      // that write at index 0 rather than at `position`: a pooled sink comes
+      // back reset, so it is `sinkIndependence` that catches those.
       property("pooledEquivalent") = forAll { (a: A) =>
         codec
           .encode(a)(using pooled)

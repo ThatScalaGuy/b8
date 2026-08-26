@@ -24,11 +24,11 @@ import java.util.IdentityHashMap
 import org.scalacheck.Arbitrary
 import org.scalacheck.Test
 
-/** Correct on a sink it has never seen, wrong on one handed to it twice.
+/** Decodes correctly, and encodes correctly only into a sink it has never seen.
   *
-  * This is the failure `pooledEquivalent` exists for, and the one shape a law
-  * that builds its pool per sample can never observe: with a fresh pool every
-  * time, every borrow is a first borrow.
+  * The failure `pooledEquivalent` exists for, and the one shape a law that
+  * builds its pool per sample can never observe: with a fresh pool every time,
+  * every borrow is a first borrow.
   */
 private final class ReuseBlindCodec extends Codec[String, Utf8]:
 
@@ -49,7 +49,30 @@ private final class ReuseBlindCodec extends Codec[String, Utf8]:
   def decodeUnsafe(in: ByteSource): String =
     new String(in.array, in.offset, in.length, UTF_8)
 
-/** The laws checked against a codec that is known to be broken.
+/** Takes the `ArraySink` fast path and writes at index 0 rather than at the
+  * sink's position.
+  *
+  * The natural slip once a backend has the fast path in hand, and invisible to
+  * every check that only ever hands it an empty sink — including
+  * `pooledEquivalent`, because a pooled sink is reset to position 0 before it
+  * is handed back out.
+  */
+private final class PositionBlindCodec extends Codec[String, Utf8]:
+
+  def encodeTo(a: String, out: ByteSink): Unit =
+    val bytes = a.getBytes(UTF_8)
+    out match
+      case s: ArraySink =>
+        s.ensure(bytes.length)
+        System.arraycopy(bytes, 0, s.buffer, 0, bytes.length)
+        s.advance(bytes.length)
+      case other =>
+        other.write(bytes)
+
+  def decodeUnsafe(in: ByteSource): String =
+    new String(in.array, in.offset, in.length, UTF_8)
+
+/** The laws checked against codecs that are known to be broken.
   *
   * `CodecLawsSuite` shows the laws pass for a correct codec, which on its own
   * would also be true of laws that assert nothing. This is the other half: a
@@ -65,17 +88,26 @@ class LawsCatchSuite extends munit.FunSuite:
       name -> Test.check(Test.Parameters.default, prop).passed
     }.toMap
 
-  test("pooledEquivalent catches an encoder blind to sink reuse") {
-    val results = outcomes(new ReuseBlindCodec)
-
+  /** Asserts `law` is the only one the codec fails. Catching the bug is half of
+    * it; not smearing the failure across unrelated laws is the other half,
+    * because that is what makes a red run point somewhere.
+    */
+  private def onlyFailure(codec: Codec[String, Utf8], law: String)(using
+      munit.Location
+  ): Unit =
+    val results = outcomes(codec)
+    val key = s"broken.$law"
     assert(
-      !results("broken.pooledEquivalent"),
-      "pooledEquivalent passed a codec that corrupts its output on a " +
-        "recycled sink — the pool is being rebuilt per sample again"
+      results.contains(key),
+      s"$law is not in the law set: ${results.keys}"
     )
+    assert(!results(key), s"$law passed a codec built to break it")
+    assertEquals(results.removed(key).filter((_, passed) => !passed), Map.empty)
 
-    // Every other law is about something else and has to stay green, or the
-    // one above proves nothing about where the bug is.
-    val others = results.removed("broken.pooledEquivalent")
-    assertEquals(others.filter((_, passed) => !passed), Map.empty)
+  test("pooledEquivalent catches an encoder blind to sink reuse") {
+    onlyFailure(new ReuseBlindCodec, "pooledEquivalent")
+  }
+
+  test("sinkIndependence catches an encoder blind to sink position") {
+    onlyFailure(new PositionBlindCodec, "sinkIndependence")
   }
