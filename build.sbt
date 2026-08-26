@@ -119,10 +119,17 @@ lazy val circe = project
   .dependsOn(core, laws % "test->compile")
   .settings(
     name := "b8-circe",
-    stubSettings,
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % V.circe,
-      "io.circe" %% "circe-parser" % V.circe
+      // The bridge parses through `io.circe.jawn.JawnParser`, which is also the
+      // type of the `parser` argument on `decoder` and `codec`. circe-parser is
+      // deliberately not here: it is a two-class wrapper this module never
+      // names, and depending on it would put an artifact nobody uses in every
+      // consumer's classpath.
+      "io.circe" %% "circe-jawn" % V.circe,
+      // Only the tests derive codecs; the bridge itself never needs the
+      // generic derivation machinery.
+      "io.circe" %% "circe-generic" % V.circe % Test
     ),
     Test / fork := true
   )
@@ -156,7 +163,6 @@ lazy val laws = project
   .dependsOn(core)
   .settings(
     name := "b8-laws",
-    stubSettings,
     // The law suites are the artifact here, so munit and scalacheck are part of
     // the published compile-scope API rather than test-only dependencies.
     libraryDependencies ++= Seq(
@@ -169,11 +175,13 @@ lazy val laws = project
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
-  .dependsOn(core)
+  .dependsOn(core, circe, laws)
   .enablePlugins(JmhPlugin, NoPublishPlugin)
   .settings(
     name := "b8-benchmarks",
-    stubSettings,
+    // The benchmarks measure the bridges against the shared law fixtures, which
+    // need derived circe codecs.
+    libraryDependencies += "io.circe" %% "circe-generic" % V.circe,
     // JMH generates Java sources compiled with an obsolete --release 8; under CI
     // sbt-typelevel turns warnings into errors. This is a NoPublish dev tool, so
     // don't fail its build on those warnings.
@@ -184,9 +192,12 @@ lazy val benchmarks = project
 lazy val docs = project
   .in(file("site"))
   .enablePlugins(TypelevelSitePlugin)
-  .dependsOn(core)
+  .dependsOn(core, circe)
   .settings(
     name := "b8-docs",
+    // docs/circe.md is mdoc-verified, so the snippets need the bridge and the
+    // derivation they use to build codecs.
+    libraryDependencies += "io.circe" %% "circe-generic" % V.circe,
     // Read markdown sources from the repo-root `docs/` dir (deterministic; the
     // plugin otherwise inherits MdocPlugin's project-relative `site/docs` default).
     mdocIn := (ThisBuild / baseDirectory).value / "docs",
