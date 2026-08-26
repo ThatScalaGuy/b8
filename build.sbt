@@ -122,6 +122,10 @@ lazy val circe = project
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % V.circe,
       "io.circe" %% "circe-parser" % V.circe,
+      // circe-parser brings circe-jawn along anyway, but `JawnParser` is named
+      // in this module's own public signatures, so depend on it directly rather
+      // than on somebody else's dependency graph staying the way it is.
+      "io.circe" %% "circe-jawn" % V.circe,
       // Only the tests derive codecs; the bridge itself never needs the
       // generic derivation machinery.
       "io.circe" %% "circe-generic" % V.circe % Test
