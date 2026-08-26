@@ -14,8 +14,8 @@ libraryDependencies += "de.thatscalaguy" %% "b8-circe" % "0.1.0"
 ```
 
 The module depends on `circe-core`, `circe-parser` and `circe-jawn`, and on nothing else. How you come by
-your circe instances — a `derives` clause, `semiauto`, or hand-written ones — stays your decision, so `circe-generic`
-is not dragged in on your behalf.
+your circe instances — a `derives` clause, `semiauto`, or hand-written ones — stays your decision, so
+`circe-generic` is not dragged in on your behalf.
 
 ## Getting started
 
@@ -180,9 +180,10 @@ method, and every place the compiler summons one builds a fresh `CirceCodec` —
 instance once where the loop can see it and the allocation disappears:
 
 ```scala mdoc:silent
-given userCodec: Codec[User, Json] = b8.circe.codec()
+object hot:
+  given Codec[User, Json] = b8.circe.codec()
 
-def encodeAll(users: List[User]): List[Array[Byte]] = users.map(_.encode[Json])
+  def encodeAll(users: List[User]): List[Array[Byte]] = users.map(_.encode[Json])
 ```
 
 Two smaller notes in the same spirit. The bridge overrides no `sizeHint`, so the inherited 256 stands:

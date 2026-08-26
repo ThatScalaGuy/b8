@@ -43,8 +43,8 @@ All AI-generated documents and code are reviewed by the maintainer before they a
 - 🧊 **No hidden pooling** — every `encode` allocates a fresh buffer unless you opt into `SinkPool.threadLocal()`
 - 🎯 **Errors at the boundary** — exceptions inside the hot path, one `Either[DecodeError, A]` per message at the edge
 - 🔌 **Bring your own format** — `Format` and its tags are plain traits, so a private wire format is a one-liner
-- 🌊 **Streaming ready** — `b8-fs2` gives you `Chunk[Byte]` and framing pipes, `b8-scodec` gives you `ByteVector`
-- 📐 **Law-checked backends** — every bridge is held to the same suite in `b8-laws`
+- 🌊 **Streaming planned** — `b8-fs2` will give you `Chunk[Byte]` and framing pipes, `b8-scodec` `ByteVector`; both are still stubs
+- 📐 **Law-checked backends** — every bridge is held to the same suite in `b8-laws` before it counts as one
 
 ## 🧩 Compatibility
 
@@ -180,8 +180,23 @@ b8
 └── site/           b8-docs        # mdoc + Laika, sources in docs/
 ```
 
-`b8-core`, `b8-laws` and `b8-circe` are implemented today; every other module is a stub, wired into the
-build and waiting for its bridge.
+## 📚 Modules
+
+| Module           | Package                 | Provides                                                               | Status                        |
+| ---------------- | ----------------------- | ---------------------------------------------------------------------- | ----------------------------- |
+| `b8-core`        | `b8`, `b8.array`        | the type classes, sinks, sources, and `Array[Byte]` as a container      | ✅ implemented                |
+| `b8-laws`        | `b8.laws`               | the shared suite every backend must pass, plus the fixtures it runs on  | ✅ implemented                |
+| `b8-circe`       | `b8.circe`              | circe behind `Format.Json`                                              | ✅ implemented — [docs](docs/circe.md) |
+| `b8-jsoniter`    | `b8.jsoniter`           | jsoniter-scala behind `Format.Json`                                     | 🚧 stub                       |
+| `b8-borer`       | `b8.borer`              | borer behind `Format.Cbor` and `Format.Json`                            | 🚧 stub                       |
+| `b8-scalapb`     | `b8.scalapb`            | ScalaPB behind `Format.Proto`                                           | 🚧 stub                       |
+| `b8-fs2`         | `b8.chunk`, `b8.stream` | `fs2.Chunk[Byte]` as a container, plus encode/decode pipes and framing   | 🚧 stub                       |
+| `b8-scodec`      | `b8.vector`             | `scodec.bits.ByteVector` as a container                                 | 🚧 stub                       |
+| `b8-benchmarks`  | `b8.benchmarks`         | JMH, measures the façade overhead against a direct backend call         | 🔒 not published              |
+| `b8-docs`        | —                       | mdoc + Laika, sources in `docs/`                                        | 🔒 not published              |
+
+Every stub is already wired into the build and waiting for its bridge. `b8-core` never gains a dependency,
+so adding one of the others never drags a parser into a module that does not want it.
 
 ## 🧪 Testing
 
