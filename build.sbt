@@ -121,10 +121,11 @@ lazy val circe = project
     name := "b8-circe",
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % V.circe,
-      "io.circe" %% "circe-parser" % V.circe,
-      // circe-parser brings circe-jawn along anyway, but `JawnParser` is named
-      // in this module's own public signatures, so depend on it directly rather
-      // than on somebody else's dependency graph staying the way it is.
+      // The bridge parses through `io.circe.jawn.JawnParser`, which is also the
+      // type of the `parser` argument on `decoder` and `codec`. circe-parser is
+      // deliberately not here: it is a two-class wrapper this module never
+      // names, and depending on it would put an artifact nobody uses in every
+      // consumer's classpath.
       "io.circe" %% "circe-jawn" % V.circe,
       // Only the tests derive codecs; the bridge itself never needs the
       // generic derivation machinery.

@@ -13,9 +13,9 @@ instance from one import, and the bytes on the wire are exactly the ones circe's
 libraryDependencies += "de.thatscalaguy" %% "b8-circe" % "0.1.0"
 ```
 
-The module depends on `circe-core`, `circe-parser` and `circe-jawn`, and on nothing else. How you come by
-your circe instances — a `derives` clause, `semiauto`, or hand-written ones — stays your decision, so
-`circe-generic` is not dragged in on your behalf.
+The module depends on `circe-core` and `circe-jawn`, and on nothing else — not even `circe-parser`, whose
+two classes the bridge never names. How you come by your circe instances — a `derives` clause, `semiauto`,
+or hand-written ones — stays your decision, so `circe-generic` is not dragged in on your behalf.
 
 ## Getting started
 
