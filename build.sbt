@@ -120,10 +120,12 @@ lazy val circe = project
   .dependsOn(core, laws % "test->compile")
   .settings(
     name := "b8-circe",
-    stubSettings,
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % V.circe,
-      "io.circe" %% "circe-parser" % V.circe
+      "io.circe" %% "circe-parser" % V.circe,
+      // Only the tests derive codecs; the bridge itself never needs the
+      // generic derivation machinery.
+      "io.circe" %% "circe-generic" % V.circe % Test
     ),
     Test / fork := true
   )
