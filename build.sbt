@@ -36,10 +36,9 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all"
 )
 
-// fs2, scodec, jsoniter, borer and scalapb are still a bare `package.scala`. An
-// empty compilation unit carries no dependency information, which the compiler
-// warns about and CI turns into an error — silence it until the module grows
-// its first definition.
+// Every module below core is still a bare `package.scala`. An empty compilation
+// unit carries no dependency information, which the compiler warns about and CI
+// turns into an error — silence it until the module grows its first definition.
 lazy val stubSettings = Seq(
   scalacOptions += "-Wconf:msg=defined in the compilation unit:s"
 )
@@ -188,9 +187,12 @@ lazy val benchmarks = project
 lazy val docs = project
   .in(file("site"))
   .enablePlugins(TypelevelSitePlugin)
-  .dependsOn(core)
+  .dependsOn(core, circe)
   .settings(
     name := "b8-docs",
+    // docs/circe.md is mdoc-verified, so the snippets need the bridge and the
+    // derivation they use to build codecs.
+    libraryDependencies += "io.circe" %% "circe-generic" % V.circe,
     // Read markdown sources from the repo-root `docs/` dir (deterministic; the
     // plugin otherwise inherits MdocPlugin's project-relative `site/docs` default).
     mdocIn := (ThisBuild / baseDirectory).value / "docs",

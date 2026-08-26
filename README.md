@@ -109,6 +109,9 @@ Switching the backend is one import — nothing else in the snippet changes:
 import b8.circe.given // instead of b8.jsoniter.given
 ```
 
+`b8-circe` is the bridge that exists today — [docs/circe.md](docs/circe.md) covers its printer and parser
+settings, which of its givens resolves for which type, and how circe's failures become a `DecodeError`.
+
 Switching the target container is one import as well:
 
 ```scala
@@ -177,8 +180,8 @@ b8
 └── site/           b8-docs        # mdoc + Laika, sources in docs/
 ```
 
-Only `b8-core` and `b8.array` are implemented today; every other module is a stub, wired into the build
-and waiting for its bridge.
+`b8-core`, `b8-laws` and `b8-circe` are implemented today; every other module is a stub, wired into the
+build and waiting for its bridge.
 
 ## 🧪 Testing
 
