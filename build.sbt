@@ -136,12 +136,18 @@ lazy val circe = project
 
 lazy val borer = project
   .in(file("borer"))
-  .dependsOn(core, laws % "test->compile")
+  // `circe % Test` is for one test only: the one showing that b8.borer.cbor and
+  // another backend's JSON bridge coexist in a single scope, which is the whole
+  // reason the per-format sub-packages exist. It stays out of the POM.
+  .dependsOn(core, circe % Test, laws % "test->compile")
   .settings(
     name := "b8-borer",
-    stubSettings,
     libraryDependencies ++= Seq(
-      "io.bullet" %% "borer-core" % V.borer
+      "io.bullet" %% "borer-core" % V.borer,
+      // Only the tests derive codecs; the bridge itself never needs the
+      // derivation macros.
+      "io.bullet" %% "borer-derivation" % V.borer % Test,
+      "io.circe" %% "circe-generic" % V.circe % Test
     ),
     Test / fork := true
   )
@@ -175,13 +181,16 @@ lazy val laws = project
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
-  .dependsOn(core, circe, laws)
+  .dependsOn(core, circe, borer, laws)
   .enablePlugins(JmhPlugin, NoPublishPlugin)
   .settings(
     name := "b8-benchmarks",
     // The benchmarks measure the bridges against the shared law fixtures, which
-    // need derived circe codecs.
-    libraryDependencies += "io.circe" %% "circe-generic" % V.circe,
+    // need codecs derived for each backend.
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-generic" % V.circe,
+      "io.bullet" %% "borer-derivation" % V.borer
+    ),
     // JMH generates Java sources compiled with an obsolete --release 8; under CI
     // sbt-typelevel turns warnings into errors. This is a NoPublish dev tool, so
     // don't fail its build on those warnings.
@@ -192,12 +201,15 @@ lazy val benchmarks = project
 lazy val docs = project
   .in(file("site"))
   .enablePlugins(TypelevelSitePlugin)
-  .dependsOn(core, circe)
+  .dependsOn(core, circe, borer)
   .settings(
     name := "b8-docs",
-    // docs/circe.md is mdoc-verified, so the snippets need the bridge and the
-    // derivation they use to build codecs.
-    libraryDependencies += "io.circe" %% "circe-generic" % V.circe,
+    // docs/circe.md and docs/borer.md are mdoc-verified, so the snippets need
+    // the bridges and the derivation they use to build codecs.
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-generic" % V.circe,
+      "io.bullet" %% "borer-derivation" % V.borer
+    ),
     // Read markdown sources from the repo-root `docs/` dir (deterministic; the
     // plugin otherwise inherits MdocPlugin's project-relative `site/docs` default).
     mdocIn := (ThisBuild / baseDirectory).value / "docs",
