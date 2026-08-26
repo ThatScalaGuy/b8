@@ -171,11 +171,13 @@ lazy val laws = project
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
-  .dependsOn(core)
+  .dependsOn(core, circe, laws)
   .enablePlugins(JmhPlugin, NoPublishPlugin)
   .settings(
     name := "b8-benchmarks",
-    stubSettings,
+    // The benchmarks measure the bridges against the shared law fixtures, which
+    // need derived circe codecs.
+    libraryDependencies += "io.circe" %% "circe-generic" % V.circe,
     // JMH generates Java sources compiled with an obsolete --release 8; under CI
     // sbt-typelevel turns warnings into errors. This is a NoPublish dev tool, so
     // don't fail its build on those warnings.
