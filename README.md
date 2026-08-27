@@ -54,6 +54,7 @@ All AI-generated documents and code are reviewed by the maintainer before they a
 | **JDK**        | 11, 17, 21, 25 — **minimum JDK 11** |
 | **FS2**        | 3.13.x (`b8-fs2` only)              |
 | **jsoniter-scala** | 2.40.x (`b8-jsoniter` only)     |
+| **circe**      | 0.14.x (`b8-circe` only)            |
 | **borer**      | 1.17.x (`b8-borer` only)            |
 | **scodec-bits** | 1.2.x (`b8-scodec` only)           |
 
