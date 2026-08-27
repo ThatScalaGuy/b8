@@ -43,7 +43,7 @@ All AI-generated documents and code are reviewed by the maintainer before they a
 - 🧊 **No hidden pooling** — every `encode` allocates a fresh buffer unless you opt into `SinkPool.threadLocal()`
 - 🎯 **Errors at the boundary** — exceptions inside the hot path, one `Either[DecodeError, A]` per message at the edge
 - 🔌 **Bring your own format** — `Format` and its tags are plain traits, so a private wire format is a one-liner
-- 🌊 **Streaming planned** — `b8-fs2` will give you `Chunk[Byte]` and framing pipes, `b8-scodec` `ByteVector`; both are still stubs
+- 🧵 **`ByteVector` today** — `b8-scodec` gives you `scodec.bits.ByteVector` as a target container; `b8-fs2` will add `Chunk[Byte]` and framing pipes, and is still a stub
 - 📐 **Law-checked backends** — every bridge is held to the same suite in `b8-laws` before it counts as one
 
 ## 🧩 Compatibility
@@ -133,9 +133,14 @@ matters. `b8-circe` is the compatibility bridge for codebases already built on `
 Switching the target container is one import as well:
 
 ```scala
-import b8.chunk.*  // fs2.Chunk[Byte], from b8-fs2
 import b8.vector.* // scodec.bits.ByteVector, from b8-scodec
+// or b8.chunk.*   — fs2.Chunk[Byte], from b8-fs2
 ```
+
+One at a time, though: the container packages declare the same four names, so importing two of them in one
+file is a compile error by design — one container per file, the same rule as one backend per format.
+`b8-scodec` is the one that exists today, and [docs/scodec.md](docs/scodec.md) covers what a `ByteVector`
+costs on each side and when to `compact` one.
 
 ### Writing into a buffer you own
 
@@ -209,7 +214,7 @@ b8
 | `b8-borer`       | `b8.borer`              | borer behind `Format.Cbor` and `Format.Json`                            | ✅ implemented — [docs](docs/borer.md) |
 | `b8-scalapb`     | `b8.scalapb`            | ScalaPB behind `Format.Proto`                                           | 🚧 stub                       |
 | `b8-fs2`         | `b8.chunk`, `b8.stream` | `fs2.Chunk[Byte]` as a container, plus encode/decode pipes and framing   | 🚧 stub                       |
-| `b8-scodec`      | `b8.vector`             | `scodec.bits.ByteVector` as a container                                 | 🚧 stub                       |
+| `b8-scodec`      | `b8.vector`             | `scodec.bits.ByteVector` as a container                                 | ✅ implemented — [docs](docs/scodec.md) |
 | `b8-benchmarks`  | `b8.benchmarks`         | JMH, measures the façade overhead against a direct backend call         | 🔒 not published              |
 | `b8-docs`        | —                       | mdoc + Laika, sources in `docs/`                                        | 🔒 not published              |
 

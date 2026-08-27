@@ -36,7 +36,7 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all"
 )
 
-// Every module below core is still a bare `package.scala`. An empty compilation
+// `b8-fs2` and `b8-scalapb` are still a bare `package.scala`. An empty compilation
 // unit carries no dependency information, which the compiler warns about and CI
 // turns into an error — silence it until the module grows its first definition.
 lazy val stubSettings = Seq(
@@ -89,12 +89,16 @@ lazy val fs2 = project
 
 lazy val scodec = project
   .in(file("scodec"))
-  .dependsOn(core, laws % "test->compile")
+  // `jsoniter % Test` is for the tests only: the container axis has to work
+  // with an ordinary bridge in scope, and running the shared fixtures through
+  // one is what shows it. The module itself knows no backend and no format.
+  .dependsOn(core, jsoniter % Test, laws % "test->compile")
   .settings(
     name := "b8-scodec",
-    stubSettings,
     libraryDependencies ++= Seq(
-      "org.scodec" %% "scodec-bits" % V.scodecBits
+      "org.scodec" %% "scodec-bits" % V.scodecBits,
+      // Only the tests derive codecs; the container never needs them.
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % V.jsoniter % Test
     ),
     Test / fork := true
   )
@@ -186,7 +190,7 @@ lazy val laws = project
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
-  .dependsOn(core, jsoniter, circe, borer, laws)
+  .dependsOn(core, scodec, jsoniter, circe, borer, laws)
   .enablePlugins(JmhPlugin, NoPublishPlugin)
   .settings(
     name := "b8-benchmarks",
@@ -207,7 +211,7 @@ lazy val benchmarks = project
 lazy val docs = project
   .in(file("site"))
   .enablePlugins(TypelevelSitePlugin)
-  .dependsOn(core, jsoniter, circe, borer)
+  .dependsOn(core, scodec, jsoniter, circe, borer)
   .settings(
     name := "b8-docs",
     // The bridge pages are mdoc-verified, so the snippets need the bridges and

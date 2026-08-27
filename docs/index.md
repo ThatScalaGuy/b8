@@ -29,9 +29,10 @@ one-line diff. And because the container is a package, `Array[Byte]`, `fs2.Chunk
 
 ## Getting started
 
-`b8-core`, the [jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md) and the
-[borer bridge](borer.md) exist today; the other backends are in progress. The core module has no
-dependencies at all, so it never pulls a JSON parser into a module that does not want one.
+`b8-core`, the [jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md), the
+[borer bridge](borer.md) and the [scodec-bits container](scodec.md) exist today; the other backends are in
+progress. The core module has no dependencies at all, so it never pulls a JSON parser into a module that
+does not want one.
 
 ```scala
 libraryDependencies += "de.thatscalaguy" %% "b8-core" % "0.1.0"
@@ -63,8 +64,9 @@ val back = bytes.decodeAs[String, Utf8]
 
 ## Sinks and sources
 
-`encode` hands you a fresh, exact-size `Array[Byte]`. When you already own the destination, encode into it
-directly and skip the copy — `encodeTo` writes into any `ByteSink`:
+`encode` hands you a fresh, exact-size `Array[Byte]` — or, with [`b8.vector`](scodec.md) imported instead,
+an exact-size `scodec.bits.ByteVector` over that same array. When you already own the destination, encode
+into it directly and skip the copy — `encodeTo` writes into any `ByteSink`:
 
 - `ArraySink` — growable heap buffer, with a fast path (`ensure` / `buffer` / `advance`) that lets a
   backend serialize straight into the array
@@ -125,9 +127,9 @@ instead of being pinned to the thread for the rest of its life.
 | `b8-scalapb`    | `b8.scalapb`           | ScalaPB behind `Format.Proto`                                      |
 | `b8-laws`       | `b8.laws`              | the shared suite every backend must pass                           |
 
-`b8-core`, `b8-laws`, `b8-jsoniter`, `b8-circe` and `b8-borer` are implemented today; the
-[jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md) and the [borer bridge](borer.md) have a
-page each. Everything else is a stub for now.
+`b8-core`, `b8-laws`, `b8-jsoniter`, `b8-circe`, `b8-borer` and `b8-scodec` are implemented today; the
+[jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md), the [borer bridge](borer.md) and the
+[scodec-bits container](scodec.md) have a page each. `b8-fs2` and `b8-scalapb` are stubs for now.
 
 ## Defining your own format
 
@@ -138,5 +140,5 @@ b8:
 trait Avro extends Format
 ```
 
-Any `Encoder[A, Avro]` you write joins the same API as the built-in tags, including the `b8.array`
-extension methods.
+Any `Encoder[A, Avro]` you write joins the same API as the built-in tags, including the `b8.array` and
+`b8.vector` extension methods.
