@@ -53,6 +53,7 @@ All AI-generated documents and code are reviewed by the maintainer before they a
 | **Scala**      | 3.3.8 (Scala 3.3 **LTS**)           |
 | **JDK**        | 11, 17, 21, 25 — **minimum JDK 11** |
 | **FS2**        | 3.13.x (`b8-fs2` only)              |
+| **jsoniter-scala** | 2.40.x (`b8-jsoniter` only)     |
 | **borer**      | 1.17.x (`b8-borer` only)            |
 | **scodec-bits** | 1.2.x (`b8-scodec` only)           |
 
@@ -68,7 +69,12 @@ All AI-generated documents and code are reviewed by the maintainer before they a
 ```scala
 libraryDependencies ++= Seq(
   "de.thatscalaguy" %% "b8-core" % "0.1.0",
-  "de.thatscalaguy" %% "b8-jsoniter" % "0.1.0" // or -circe, -borer, -scalapb
+  "de.thatscalaguy" %% "b8-jsoniter" % "0.1.0", // or -circe, -borer, -scalapb
+  // b8 does not re-export a backend's derivation macros: how you come by your
+  // codecs stays your decision. The internal scopes keep them out of your POM;
+  // `test-internal` does not extend `compile-internal`, so add both if you
+  // derive codecs in test sources too.
+  "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % "2.40.1" % "compile-internal"
 )
 ```
 
@@ -77,6 +83,7 @@ libraryDependencies ++= Seq(
 ```scala
 ivy"de.thatscalaguy::b8-core:0.1.0"
 ivy"de.thatscalaguy::b8-jsoniter:0.1.0"
+ivy"com.github.plokhotnyuk.jsoniter-scala::jsoniter-scala-macros:2.40.1" // compileIvyDeps
 ```
 
 **scala-cli**
@@ -84,6 +91,7 @@ ivy"de.thatscalaguy::b8-jsoniter:0.1.0"
 ```scala
 //> using dep de.thatscalaguy::b8-core:0.1.0
 //> using dep de.thatscalaguy::b8-jsoniter:0.1.0
+//> using dep com.github.plokhotnyuk.jsoniter-scala::jsoniter-scala-macros:2.40.1
 ```
 
 ## 🚀 Quick Start
@@ -96,7 +104,12 @@ import b8.*
 import b8.array.*
 import b8.jsoniter.given
 
-case class User(id: Long, name: String) derives ConfiguredJsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.core.JsonValueCodec
+import com.github.plokhotnyuk.jsoniter_scala.macros.JsonCodecMaker
+
+case class User(id: Long, name: String)
+
+given JsonValueCodec[User] = JsonCodecMaker.make
 
 val user = User(1L, "Ada")
 
@@ -110,8 +123,11 @@ Switching the backend is one import — nothing else in the snippet changes:
 import b8.circe.given // instead of b8.jsoniter.given
 ```
 
-`b8-circe` is the bridge that exists today — [docs/circe.md](docs/circe.md) covers its printer and parser
-settings, which of its givens resolves for which type, and how circe's failures become a `DecodeError`.
+jsoniter-scala is the backend to reach for unless you have a reason not to —
+[docs/jsoniter.md](docs/jsoniter.md) covers its configuration, the adaptive size hint and when reentrancy
+matters. `b8-circe` is the compatibility bridge for codebases already built on `io.circe.Json`
+([docs/circe.md](docs/circe.md)), and `b8-borer` covers CBOR and JSON from one set of instances
+([docs/borer.md](docs/borer.md)).
 
 Switching the target container is one import as well:
 
@@ -187,8 +203,8 @@ b8
 | ---------------- | ----------------------- | ---------------------------------------------------------------------- | ----------------------------- |
 | `b8-core`        | `b8`, `b8.array`        | the type classes, sinks, sources, and `Array[Byte]` as a container      | ✅ implemented                |
 | `b8-laws`        | `b8.laws`               | the shared suite every backend must pass, plus the fixtures it runs on  | ✅ implemented                |
-| `b8-circe`       | `b8.circe`              | circe behind `Format.Json`                                              | ✅ implemented — [docs](docs/circe.md) |
-| `b8-jsoniter`    | `b8.jsoniter`           | jsoniter-scala behind `Format.Json`                                     | 🚧 stub                       |
+| `b8-jsoniter`    | `b8.jsoniter`           | jsoniter-scala behind `Format.Json` — **the recommended JSON backend**   | ✅ implemented — [docs](docs/jsoniter.md) |
+| `b8-circe`       | `b8.circe`              | circe behind `Format.Json` — the compatibility bridge                   | ✅ implemented — [docs](docs/circe.md) |
 | `b8-borer`       | `b8.borer`              | borer behind `Format.Cbor` and `Format.Json`                            | ✅ implemented — [docs](docs/borer.md) |
 | `b8-scalapb`     | `b8.scalapb`            | ScalaPB behind `Format.Proto`                                           | 🚧 stub                       |
 | `b8-fs2`         | `b8.chunk`, `b8.stream` | `fs2.Chunk[Byte]` as a container, plus encode/decode pipes and framing   | 🚧 stub                       |

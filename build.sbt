@@ -101,15 +101,20 @@ lazy val scodec = project
 
 lazy val jsoniter = project
   .in(file("jsoniter"))
-  .dependsOn(core, laws % "test->compile")
+  // `borer % Test` and `circe % Test` are for the mixing tests only: the one
+  // showing that b8.jsoniter answers for JSON next to borer's CBOR bridge, and
+  // the one pinning down what two JSON bridges in one scope actually do. Both
+  // stay test-scoped.
+  .dependsOn(core, borer % Test, circe % Test, laws % "test->compile")
   .settings(
     name := "b8-jsoniter",
-    stubSettings,
     libraryDependencies ++= Seq(
       "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-core" % V.jsoniter,
-      // Macros are only needed to derive codecs at compile time, never at runtime,
-      // so they must not leak into the published POM.
-      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % V.jsoniter % "compile-internal"
+      // Only the tests derive codecs; the bridge itself never needs the
+      // derivation macros.
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % V.jsoniter % Test,
+      "io.bullet" %% "borer-derivation" % V.borer % Test,
+      "io.circe" %% "circe-generic" % V.circe % Test
     ),
     Test / fork := true
   )
@@ -181,13 +186,14 @@ lazy val laws = project
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
-  .dependsOn(core, circe, borer, laws)
+  .dependsOn(core, jsoniter, circe, borer, laws)
   .enablePlugins(JmhPlugin, NoPublishPlugin)
   .settings(
     name := "b8-benchmarks",
     // The benchmarks measure the bridges against the shared law fixtures, which
     // need codecs derived for each backend.
     libraryDependencies ++= Seq(
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % V.jsoniter,
       "io.circe" %% "circe-generic" % V.circe,
       "io.bullet" %% "borer-derivation" % V.borer
     ),
@@ -201,12 +207,13 @@ lazy val benchmarks = project
 lazy val docs = project
   .in(file("site"))
   .enablePlugins(TypelevelSitePlugin)
-  .dependsOn(core, circe, borer)
+  .dependsOn(core, jsoniter, circe, borer)
   .settings(
     name := "b8-docs",
-    // docs/circe.md and docs/borer.md are mdoc-verified, so the snippets need
-    // the bridges and the derivation they use to build codecs.
+    // The bridge pages are mdoc-verified, so the snippets need the bridges and
+    // the derivation they use to build codecs.
     libraryDependencies ++= Seq(
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % V.jsoniter,
       "io.circe" %% "circe-generic" % V.circe,
       "io.bullet" %% "borer-derivation" % V.borer
     ),

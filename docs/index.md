@@ -29,9 +29,9 @@ one-line diff. And because the container is a package, `Array[Byte]`, `fs2.Chunk
 
 ## Getting started
 
-`b8-core`, the [circe bridge](circe.md) and the [borer bridge](borer.md) exist today; the other backends are
-in progress. The core module has no dependencies at all, so it never pulls a JSON parser into a module that
-does not want one.
+`b8-core`, the [jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md) and the
+[borer bridge](borer.md) exist today; the other backends are in progress. The core module has no
+dependencies at all, so it never pulls a JSON parser into a module that does not want one.
 
 ```scala
 libraryDependencies += "de.thatscalaguy" %% "b8-core" % "0.1.0"
@@ -119,14 +119,15 @@ instead of being pinned to the thread for the rest of its life.
 | `b8-core`       | `b8`, `b8.array`       | the type classes, sinks, sources, and `Array[Byte]` as a container |
 | `b8-fs2`        | `b8.chunk`, `b8.stream` | `fs2.Chunk[Byte]` as a container, plus encode/decode pipes and framing |
 | `b8-scodec`     | `b8.vector`            | `scodec.bits.ByteVector` as a container                            |
-| `b8-jsoniter`   | `b8.jsoniter`          | jsoniter-scala behind `Format.Json`                                |
+| `b8-jsoniter`   | `b8.jsoniter`          | jsoniter-scala behind `Format.Json` — the recommended JSON backend |
 | `b8-circe`      | `b8.circe`             | circe behind `Format.Json`                                         |
 | `b8-borer`      | `b8.borer`             | borer behind `Format.Cbor` and `Format.Json`                       |
 | `b8-scalapb`    | `b8.scalapb`           | ScalaPB behind `Format.Proto`                                      |
 | `b8-laws`       | `b8.laws`              | the shared suite every backend must pass                           |
 
-`b8-core`, `b8-laws`, `b8-circe` and `b8-borer` are implemented today; the [circe bridge](circe.md) and the
-[borer bridge](borer.md) have a page each. Everything else is a stub for now.
+`b8-core`, `b8-laws`, `b8-jsoniter`, `b8-circe` and `b8-borer` are implemented today; the
+[jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md) and the [borer bridge](borer.md) have a
+page each. Everything else is a stub for now.
 
 ## Defining your own format
 
