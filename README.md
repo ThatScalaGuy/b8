@@ -56,6 +56,7 @@ All AI-generated documents and code are reviewed by the maintainer before they a
 | **jsoniter-scala** | 2.40.x (`b8-jsoniter` only)     |
 | **circe**      | 0.14.x (`b8-circe` only)            |
 | **borer**      | 1.17.x (`b8-borer` only)            |
+| **ScalaPB**    | 0.11.x (`b8-scalapb` only)          |
 | **scodec-bits** | 1.2.x (`b8-scodec` only)           |
 
 > `b8-core` has no library dependencies at all. Every other module pulls in exactly one backend, so you
@@ -128,7 +129,9 @@ jsoniter-scala is the backend to reach for unless you have a reason not to —
 [docs/jsoniter.md](docs/jsoniter.md) covers its configuration, the adaptive size hint and when reentrancy
 matters. `b8-circe` is the compatibility bridge for codebases already built on `io.circe.Json`
 ([docs/circe.md](docs/circe.md)), and `b8-borer` covers CBOR and JSON from one set of instances
-([docs/borer.md](docs/borer.md)).
+([docs/borer.md](docs/borer.md)). When the contract is a `.proto` rather than a Scala type, `b8-scalapb`
+puts ScalaPB behind `Format.Proto` — you keep your own sbt-protoc setup and b8 adapts what it generated
+([docs/scalapb.md](docs/scalapb.md)).
 
 Switching the target container is one import as well:
 
@@ -212,13 +215,13 @@ b8
 | `b8-jsoniter`    | `b8.jsoniter`           | jsoniter-scala behind `Format.Json` — **the recommended JSON backend**   | ✅ implemented — [docs](docs/jsoniter.md) |
 | `b8-circe`       | `b8.circe`              | circe behind `Format.Json` — the compatibility bridge                   | ✅ implemented — [docs](docs/circe.md) |
 | `b8-borer`       | `b8.borer`              | borer behind `Format.Cbor` and `Format.Json`                            | ✅ implemented — [docs](docs/borer.md) |
-| `b8-scalapb`     | `b8.scalapb`            | ScalaPB behind `Format.Proto`                                           | 🚧 stub                       |
+| `b8-scalapb`     | `b8.scalapb`            | ScalaPB behind `Format.Proto`                                           | ✅ implemented — [docs](docs/scalapb.md) |
 | `b8-fs2`         | `b8.chunk`, `b8.stream` | `fs2.Chunk[Byte]` as a container, plus encode/decode pipes and framing   | 🚧 stub                       |
 | `b8-scodec`      | `b8.vector`             | `scodec.bits.ByteVector` as a container                                 | ✅ implemented — [docs](docs/scodec.md) |
 | `b8-benchmarks`  | `b8.benchmarks`         | JMH, measures the façade overhead against a direct backend call         | 🔒 not published              |
 | `b8-docs`        | —                       | mdoc + Laika, sources in `docs/`                                        | 🔒 not published              |
 
-Every stub is already wired into the build and waiting for its bridge. `b8-core` never gains a dependency,
+`b8-fs2` is already wired into the build and waiting for its bridge. `b8-core` never gains a dependency,
 so adding one of the others never drags a parser into a module that does not want it.
 
 ## 🧪 Testing

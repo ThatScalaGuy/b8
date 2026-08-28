@@ -36,9 +36,9 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all"
 )
 
-// `b8-fs2` and `b8-scalapb` are still a bare `package.scala`. An empty compilation
-// unit carries no dependency information, which the compiler warns about and CI
-// turns into an error — silence it until the module grows its first definition.
+// `b8-fs2` is still a bare `package.scala`. An empty compilation unit carries no
+// dependency information, which the compiler warns about and CI turns into an
+// error — silence it until the module grows its first definition.
 lazy val stubSettings = Seq(
   scalacOptions += "-Wconf:msg=defined in the compilation unit:s"
 )
@@ -163,13 +163,43 @@ lazy val borer = project
 
 lazy val scalapb = project
   .in(file("scalapb"))
-  .dependsOn(core, laws % "test->compile")
+  // `jsoniter % Test` is for the mixing test only: the one showing that a Proto
+  // bridge and a JSON bridge answer for their own format tags in a single
+  // scope. It stays out of the POM.
+  .dependsOn(core, jsoniter % Test, laws % "test->compile")
   .settings(
     name := "b8-scalapb",
-    stubSettings,
     libraryDependencies ++= Seq(
-      "com.thesamet.scalapb" %% "scalapb-runtime" % V.scalapb
+      "com.thesamet.scalapb" %% "scalapb-runtime" % V.scalapb,
+      // Only the mixing test derives a codec; the bridge itself never needs
+      // the derivation macros.
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % V.jsoniter % Test
     ),
+    // b8 generates no protobuf code for its users — the bridge adapts whatever
+    // ScalaPB already produced. The protos here exist only so the laws run
+    // against real generated messages, so codegen is Test-scoped and the
+    // published jar keeps exactly the one hand-written package it had before.
+    // `Compile / PB.targets` defaults to `Nil` and `Test / PB.protoSources` to
+    // `src/test/protobuf`, so neither needs saying.
+    //
+    // `_root_` is not decoration: `lazy val scalapb` above shadows the
+    // generator's own `scalapb` package and the build stops loading without it.
+    // `Scala3Sources` is not optional either — ScalaPB's default output spells
+    // wildcards `[_]`, which sbt-typelevel's `-Ykind-projector:underscores`
+    // reads as a type lambda, and that is a compile error rather than a
+    // warning. `FlatPackage` keeps the generated types in `b8.scalapb.protos`
+    // instead of a further `b8_fixtures` package named after the file.
+    Test / PB.targets := Seq(
+      _root_.scalapb.gen(
+        _root_.scalapb.GeneratorOption.Scala3Sources,
+        _root_.scalapb.GeneratorOption.FlatPackage
+      ) -> (Test / sourceManaged).value / "scalapb"
+    ),
+    // ScalaPB's generated parsers discard the builder `parseField` returns,
+    // which `-Wvalue-discard` reports once per message and CI turns into an
+    // error. Silence warnings from generated sources, and only those: the
+    // module's own test sources stay under `-Wunused:all` like everything else.
+    Test / scalacOptions += "-Wconf:src=.*/src_managed/.*:s",
     Test / fork := true
   )
 
@@ -190,7 +220,19 @@ lazy val laws = project
 
 lazy val benchmarks = project
   .in(file("benchmarks"))
-  .dependsOn(core, scodec, jsoniter, circe, borer, laws)
+  // `scalapb % "compile->test"` reaches the proto classes generated for that
+  // module's tests, so the ScalaPB benchmark measures the same messages the
+  // laws run on without a second codegen pass. Safe only because this module
+  // publishes nothing: those classes are in no jar a consumer could resolve.
+  .dependsOn(
+    core,
+    scodec,
+    jsoniter,
+    circe,
+    borer,
+    scalapb % "compile->test",
+    laws
+  )
   .enablePlugins(JmhPlugin, NoPublishPlugin)
   .settings(
     name := "b8-benchmarks",
@@ -211,7 +253,10 @@ lazy val benchmarks = project
 lazy val docs = project
   .in(file("site"))
   .enablePlugins(TypelevelSitePlugin)
-  .dependsOn(core, scodec, jsoniter, circe, borer)
+  // Same `compile->test` as the benchmarks, and for the same reason: the
+  // ScalaPB page's snippets need a generated message, and b8's own test protos
+  // are the only ones in the build. This module publishes nothing either.
+  .dependsOn(core, scodec, jsoniter, circe, borer, scalapb % "compile->test")
   .settings(
     name := "b8-docs",
     // The bridge pages are mdoc-verified, so the snippets need the bridges and

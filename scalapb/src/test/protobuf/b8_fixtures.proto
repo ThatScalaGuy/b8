@@ -1,0 +1,66 @@
+// Proto mirrors of the b8 law fixtures, field for field.
+//
+// These exist so `b8-scalapb` can be tested against messages a real protoc and
+// a real ScalaPB produced, rather than against a hand-written stand-in. They
+// are generated into the test scope only and never reach the published jar.
+//
+// The `P` prefix keeps `PFlat` and `b8.laws.Flat` apart in test sources that
+// import both — which every conversion in `ProtoFixtures` does.
+
+syntax = "proto3";
+
+package b8.scalapb.protos;
+
+option java_package = "b8.scalapb.protos";
+
+// Mirrors `b8.laws.Flat`. `id` is int64 because `flat1.id` is 4815162342,
+// which does not fit an int32.
+message PFlat {
+  int64 id = 1;
+  string name = 2;
+  bool active = 3;
+  double score = 4;
+  repeated string tags = 5;
+}
+
+// Mirrors `b8.laws.Kind`. Proto3 requires the first entry to be zero, which
+// `Alpha` already is.
+enum PKind {
+  ALPHA = 0;
+  BETA = 1;
+  GAMMA = 2;
+}
+
+// Mirrors `b8.laws.Shape`, whose two cases carry different data — a oneof.
+message PCircle {
+  double radius = 1;
+}
+
+message PRect {
+  double width = 1;
+  double height = 2;
+}
+
+message PShape {
+  oneof shape {
+    PCircle circle = 1;
+    PRect rect = 2;
+  }
+}
+
+// Mirrors `b8.laws.Nested`: one of every container a bridge has to handle.
+message PNested {
+  PFlat flat = 1;
+  repeated PFlat children = 2;
+  map<string, string> meta = 3;
+  optional PFlat opt = 4;
+  PKind kind = 5;
+  PShape shape = 6;
+}
+
+// Not a mirror of anything: the only message here that can nest into itself,
+// which is what the decoder's recursion behaviour is measured on.
+message PRecursive {
+  PRecursive child = 1;
+  string label = 2;
+}

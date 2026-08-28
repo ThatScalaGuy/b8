@@ -30,9 +30,9 @@ one-line diff. And because the container is a package, `Array[Byte]`, `fs2.Chunk
 ## Getting started
 
 `b8-core`, the [jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md), the
-[borer bridge](borer.md) and the [scodec-bits container](scodec.md) exist today; the other backends are in
-progress. The core module has no dependencies at all, so it never pulls a JSON parser into a module that
-does not want one.
+[borer bridge](borer.md), the [ScalaPB bridge](scalapb.md) and the [scodec-bits container](scodec.md)
+exist today; `b8-fs2` is in progress. The core module has no dependencies at all, so it never pulls a
+JSON parser into a module that does not want one.
 
 ```scala
 libraryDependencies += "de.thatscalaguy" %% "b8-core" % "0.1.0"
@@ -127,9 +127,10 @@ instead of being pinned to the thread for the rest of its life.
 | `b8-scalapb`    | `b8.scalapb`           | ScalaPB behind `Format.Proto`                                      |
 | `b8-laws`       | `b8.laws`              | the shared suite every backend must pass                           |
 
-`b8-core`, `b8-laws`, `b8-jsoniter`, `b8-circe`, `b8-borer` and `b8-scodec` are implemented today; the
-[jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md), the [borer bridge](borer.md) and the
-[scodec-bits container](scodec.md) have a page each. `b8-fs2` and `b8-scalapb` are stubs for now.
+`b8-core`, `b8-laws`, `b8-jsoniter`, `b8-circe`, `b8-borer`, `b8-scalapb` and `b8-scodec` are implemented
+today; the [jsoniter-scala bridge](jsoniter.md), the [circe bridge](circe.md), the
+[borer bridge](borer.md), the [ScalaPB bridge](scalapb.md) and the [scodec-bits container](scodec.md) have
+a page each. `b8-fs2` is a stub for now.
 
 ## Defining your own format
 
