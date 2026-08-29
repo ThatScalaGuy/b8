@@ -175,6 +175,13 @@ lazy val scalapb = project
       // the derivation macros.
       "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % V.jsoniter % Test
     ),
+    // Pinned rather than left to whatever sbt-protoc defaults to, so that
+    // bumping the plugin cannot quietly change the generated sources. This is
+    // the version the plugin picks today, so it freezes current behaviour
+    // rather than moving it. protoc is fetched from Maven Central like any
+    // other artifact, with a classifier for the host platform, so nothing has
+    // to be installed for it.
+    PB.protocVersion := "3.21.7",
     // b8 generates no protobuf code for its users — the bridge adapts whatever
     // ScalaPB already produced. The protos here exist only so the laws run
     // against real generated messages, so codegen is Test-scoped and the
