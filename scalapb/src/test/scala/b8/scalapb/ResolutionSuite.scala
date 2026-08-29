@@ -64,13 +64,13 @@ class ResolutionSuite extends munit.FunSuite:
   private val noGiven = "No given instance of type"
 
   test("all three resolve, and all three are the one instance") {
-    // Stronger than "all three resolve": the encoder and the decoder are the
-    // same `ScalapbCodec` the one given built, so the two directions of a type
-    // cannot end up configured apart — `deterministic` and `recursionLimit`
-    // are two fields of one object here, not two objects that happened to
-    // agree. With one given and one instance class that is almost a tautology,
-    // which is the point, and what would stop being true the moment the bridge
-    // grew a second given.
+    // Stronger than "all three resolve": all three arrive as the one class
+    // the given builds, so the two directions of a type cannot be answered by
+    // instances that disagree about anything — today there is nothing for them
+    // to disagree about, and this is the test that would notice if the bridge
+    // ever grew a setting. With one given and one instance class that is
+    // almost a tautology, which is the point, and what would stop being true
+    // the moment the bridge grew a second given.
     assert(summon[Encoder[PNested, Proto]].isInstanceOf[ScalapbCodec[?]])
     assert(summon[Decoder[PNested, Proto]].isInstanceOf[ScalapbCodec[?]])
     assert(summon[Codec[PNested, Proto]].isInstanceOf[ScalapbCodec[?]])

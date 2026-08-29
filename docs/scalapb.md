@@ -161,81 +161,84 @@ with the sink you already own and let the message be written straight into it.
 
 ## Configuration
 
-Three factories, and only one of them takes both parameters:
+There is none, and the three factories exist only to let you name an instance rather than let the given
+build a fresh one:
 
 ```scala
-b8.scalapb.encoder[A <: GeneratedMessage](
-  deterministic: Boolean = false
-): Encoder[A, Proto]
+b8.scalapb.encoder[A <: GeneratedMessage]: Encoder[A, Proto]
 
-b8.scalapb.decoder[A <: GeneratedMessage](
-  recursionLimit: Int = 100
-)(using GeneratedMessageCompanion[A]): Decoder[A, Proto]
+b8.scalapb.decoder[A <: GeneratedMessage](using
+  GeneratedMessageCompanion[A]
+): Decoder[A, Proto]
 
-b8.scalapb.codec[A <: GeneratedMessage](
-  deterministic: Boolean = false,
-  recursionLimit: Int = 100
-)(using GeneratedMessageCompanion[A]): Codec[A, Proto]
+b8.scalapb.codec[A <: GeneratedMessage](using
+  GeneratedMessageCompanion[A]
+): Codec[A, Proto]
 ```
 
 `encoder` needs no companion because writing asks only the value: every `GeneratedMessage` carries both
 `serializedSize` and `writeTo` itself. Reading has to build a value from nothing, which is what the
 companion is for.
 
-Both parameters are protobuf's own switches, both are set on protobuf's own stream — and today ScalaPB acts
-on neither. That is worth being exact about rather than polite about, because both of them look like
-guarantees and neither is one.
+That emptiness is deliberate and worth explaining, because protobuf has exactly two knobs you will come
+looking for and **ScalaPB reads neither**. Offering them would have meant offering guarantees the backend
+does not make.
 
-**`deterministic`** calls `useDeterministicSerialization()` on the `CodedOutputStream`. The flag is real
-and protobuf-java's own map writer reads it, sorting map keys before writing them. ScalaPB-generated code
-does not go through that writer: its `writeTo` walks the Scala `Map` a map field is and never asks the
-stream whether the output was meant to be deterministic. The word does not occur anywhere in the sources
-the 0.11.20 generator emits. So two messages that are `==` but whose maps were built in different insertion
-orders can still encode to different bytes with this switched on — a small `Map` keeps its insertion order,
-and the encoding follows it. What does hold, with or without the flag, is the weaker property most callers
-actually want: one value encodes to the same bytes every time. Do not hash or sign the encoding of a
-message with a map field on the strength of this parameter.
+**`CodedOutputStream.useDeterministicSerialization`** is protobuf's switch for writing map entries in a
+stable order, and protobuf-java's own map writer honours it. ScalaPB-generated code never reaches that
+writer: a `map<string, string>` field is a Scala `Map`, and the generated `writeTo` iterates it directly and
+writes the entries in whatever order it gets them. The word does not occur anywhere in the sources the
+0.11.20 generator emits, and setting the flag by hand on a `CodedOutputStream` changes no byte of what
+ScalaPB writes.
 
-**`recursionLimit`** is set on the `CodedInputStream` before parsing, and **ScalaPB does not enforce it.** A
-nested message field is read through `scalapb.LiteParser.readMessage`, which pushes a length limit and
-recurses without ever touching protobuf's recursion counter, so nothing compares a depth against this
-number. The demonstration is short and it is not subtle:
+So the order of a map field on the wire is the Scala `Map`'s iteration order, and that is a worse thing to
+depend on than it first looks. Two messages that are `==` but whose maps were built in different insertion
+orders encode **differently** when the map holds four entries or fewer, because `Map1` through `Map4` keep
+the order they were built in — and encode **identically** from five entries on, where Scala switches to a
+hash-ordered `HashMap`. Which of the two you get is decided by the collection's internal representation,
+not by anything protobuf or this bridge promises:
+
+```scala mdoc
+val m1 = Map("a" -> "1", "b" -> "2")
+val m2 = Map("b" -> "2", "a" -> "1")
+
+m1 == m2
+
+PNested(meta = m1).encode[Format.Proto]
+  .sameElements(PNested(meta = m2).encode[Format.Proto])
+```
+
+What does hold is the weaker property most callers reaching for the flag actually want: one value encodes
+to the same bytes every time, because one `Map` iterates the same way twice. If you need stable bytes across
+values — to hash, sign or content-address them — compare the parsed messages instead, or carry the entries
+in a `repeated` field the sender sorts.
+
+**`CodedInputStream.setRecursionLimit`** is protobuf's bound on nesting depth, and ScalaPB does not enforce
+it either. A nested message field is read through `scalapb.LiteParser.readMessage`, which pushes a length
+limit and then recurses without ever touching protobuf's recursion counter, so nothing compares a depth
+against the limit. Two hundred levels — twice protobuf's own default of 100 — come back whole:
 
 ```scala mdoc:silent
-import b8.Codec
 import b8.scalapb.protos.PRecursive
 
 def chain(depth: Int): PRecursive =
   (1 to depth).foldLeft(PRecursive(label = "leaf"))((inner, _) =>
     PRecursive(child = Some(inner))
   )
-
-object shallow:
-  given Codec[PRecursive, Format.Proto] =
-    b8.scalapb.codec(recursionLimit = 8)
-
-  def decodes(bs: Array[Byte]): Boolean =
-    bs.decodeAs[PRecursive, Format.Proto].isRight
 ```
 
 ```scala mdoc
-shallow.decodes(chain(200).encode[Format.Proto])
+chain(200).encode[Format.Proto].decodeAs[PRecursive, Format.Proto].isRight
 ```
 
-Two hundred levels through a decoder that was told to allow eight. Push the depth far enough and the parse
-does fail, but it fails as a `StackOverflowError` — which `decode` does not catch, which no `Try` would
-catch either, and which is not a `DecodeError`. Against untrusted input, bound the **length** instead:
-every level of nesting costs at least two bytes on the wire, so a cap on the size of the message you are
-willing to read is a cap on how deep it can be.
+Push the depth far enough and the parse does fail, but it fails as a `StackOverflowError` — which `decode`
+does not catch, which no `Try` would catch either, and which is not a `DecodeError`. Against untrusted
+input, bound the **length** instead: every level of nesting costs at least two bytes on the wire, so a cap
+on the size of the message you are willing to read is a cap on how deep it can be.
 
-Both parameters are kept because they are the switches protobuf offers, they cost one call each, and a
-ScalaPB release that started honouring them would need no change on the b8 side. Read them as intent, not
-as protection, and do not build anything on either of them today.
-
-The `object shallow` above is also the pattern for putting any of this in scope. A hand-built instance
-outranks the bridge's given: it is a value of exactly the type being summoned, while the bridge's given is
-parameterised and takes arguments of its own, which makes it the less specific of the two. It reaches only
-as far as its enclosing scope; everything outside still sees protobuf's defaults.
+Both facts are pinned by tests — the first by setting protobuf's flag by hand and checking that ScalaPB
+still ignores it — so a release that starts honouring either one fails the build and brings someone back to
+this section.
 
 ## Errors
 
@@ -382,8 +385,10 @@ instance to have lost, but it is an allocation per message on a path whose whole
 Bind the instance once where the loop can see it:
 
 ```scala mdoc:silent
+import b8.Codec
+
 object hot:
-  given Codec[PFlat, Format.Proto] = b8.scalapb.codec()
+  given Codec[PFlat, Format.Proto] = b8.scalapb.codec
 
   def encodeAll(flats: List[PFlat]): List[Array[Byte]] =
     flats.map(_.encode[Format.Proto])

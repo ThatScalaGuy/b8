@@ -16,6 +16,8 @@
 
 package b8.scalapb
 
+import b8.ByteSource
+import b8.Codec
 import b8.DecodeError
 import b8.Format.Proto
 import b8.array.*
@@ -23,8 +25,10 @@ import b8.scalapb.ProtoFixtures.pNested1
 import b8.scalapb.protos.PFlat
 import b8.scalapb.protos.PKind
 import b8.scalapb.protos.PNested
+import b8.scalapb.protos.PRecursive
 import b8.scalapb.protos.PShape
 
+import com.google.protobuf.CodedOutputStream
 import scalapb.UnknownFieldSet
 
 /** Protobuf behaviours that read like bridge bugs and are not.
@@ -38,7 +42,7 @@ import scalapb.UnknownFieldSet
   * wire format does not have. Writing the cases down once is cheaper than
   * explaining them once per bug report.
   *
-  * The reason underneath all six is that a proto3 message is not
+  * The reason underneath most of them is that a proto3 message is not
   * self-describing. The wire carries field numbers, wire types and bytes. It
   * does not carry which fields the schema declares, which of them were set,
   * what an enum value means, or where the message ends. So a decoder cannot
@@ -53,6 +57,12 @@ import scalapb.UnknownFieldSet
   * are the ones `ProtoFixtures`' generators structurally cannot draw, because
   * the `b8.laws` types they are derived from have no counterpart for either.
   * The laws will never see them. This suite does.
+  *
+  * The last two are here for a different reason: they are why `b8.scalapb`
+  * offers nothing to configure. Protobuf has a switch for each of them —
+  * `useDeterministicSerialization` and `setRecursionLimit` — and ScalaPB reads
+  * neither, so the bridge exposes neither. If a ScalaPB release ever starts
+  * honouring one, the matching test here fails and says so.
   */
 class ProtoSemanticsSuite extends munit.FunSuite:
 
@@ -238,4 +248,89 @@ class ProtoSemanticsSuite extends munit.FunSuite:
     // zero to reach the other end.
     assertEquals(back, negZero)
     assert(negZero.toByteArray.isEmpty)
+  }
+
+  test("map fields encode in the Scala Map's own iteration order") {
+    // Four entries, because Scala keeps `Map1` to `Map4` in the order they
+    // were built and only switches to a hash-ordered `HashMap` at five. That
+    // switch is the point rather than a detail to work around: which of two
+    // `==` maps encodes to which bytes is decided by the collection's internal
+    // representation, and nothing about protobuf or this bridge promises
+    // anything about it either way.
+    val m1 = Map("a" -> "1", "b" -> "2", "c" -> "3", "d" -> "4")
+    val m2 = Map("d" -> "4", "c" -> "3", "b" -> "2", "a" -> "1")
+    assertEquals(m1, m2)
+    assertNotEquals(m1.keys.toList, m2.keys.toList)
+
+    val first = PNested(meta = m1).encode[Proto]
+    val second = PNested(meta = m2).encode[Proto]
+    assert(!first.sameElements(second), clue(first.length))
+
+    // The tripwire. protobuf-java has a map writer that sorts entries by key
+    // before writing them, reached by
+    // `CodedOutputStream.useDeterministicSerialization`, and ScalaPB's
+    // generated `writeTo` is not it: a map field is `meta.foreach { ... }`
+    // over the Scala `Map`, and the flag is never consulted. Turning it on by
+    // hand here is the strongest form of the `deterministic` parameter
+    // `b8.scalapb.codec` could have offered, and it changes nothing — which is
+    // why there is no such parameter. If this assertion ever fails, ScalaPB
+    // has started honouring the flag and the parameter becomes worth having.
+    assert(
+      !deterministically(m1).sameElements(deterministically(m2)),
+      "ScalaPB now honours deterministic serialization: b8.scalapb.codec could offer it"
+    )
+
+    // What does hold, and what most callers reaching for that flag actually
+    // want: one value encodes to the same bytes every time, because one `Map`
+    // iterates the same way twice. `CodecLaws.deterministic` covers it for the
+    // fixtures; this pins the reason it is not the stronger property.
+    assert(first.sameElements(PNested(meta = m1).encode[Proto]))
+  }
+
+  /** `PNested(meta = m)` written through protobuf's own encoder with
+    * deterministic serialization turned on.
+    *
+    * Deliberately not routed through the bridge: the bridge has no way to set
+    * this flag, and the point of the assertion above is that setting it makes
+    * no difference to what ScalaPB writes.
+    */
+  private def deterministically(m: Map[String, String]): Array[Byte] =
+    val message = PNested(meta = m)
+    val out = new Array[Byte](message.serializedSize)
+    val cos = CodedOutputStream.newInstance(out)
+    cos.useDeterministicSerialization()
+    message.writeTo(cos)
+    cos.checkNoSpaceLeft()
+    out
+
+  test("nesting is bounded by the stack, not by protobuf's recursion limit") {
+    // Built as a fold, so making the value is iterative and cannot overflow
+    // the stack the way parsing it can.
+    def chain(depth: Int): PRecursive =
+      (1 to depth).foldLeft(PRecursive(label = "leaf"))((inner, _) =>
+        PRecursive(child = Some(inner))
+      )
+
+    val codec = summon[Codec[PRecursive, Proto]]
+    val deep = chain(200)
+    // Twice protobuf's own default of 100, and it comes back whole. ScalaPB
+    // reads a nested message through `scalapb.LiteParser.readMessage`, which
+    // pushes a length limit and recurses without touching protobuf's recursion
+    // counter, so `CodedInputStream.setRecursionLimit` would have changed
+    // nothing here. That is why `b8.scalapb.codec` takes no `recursionLimit`.
+    assertEquals(codec.decode(ByteSource(codec.encode(deep))), Right(deep))
+
+    // Equality alone would not catch a degenerate helper: a `chain` that
+    // ignored `depth` would round-trip just as happily.
+    assert(
+      deep.serializedSize > chain(1).serializedSize,
+      clue(deep.serializedSize)
+    )
+
+    // There is deliberately no test for the failure. Past a few thousand
+    // levels the parse raises a `StackOverflowError`, which `decode` does not
+    // catch and no `Try` would either; a suite that provoked it would leave
+    // the thread in a state nothing should be asserting about, at a depth that
+    // is a property of the running JVM rather than of this bridge. The
+    // mitigation is a cap on input length, not on depth.
   }

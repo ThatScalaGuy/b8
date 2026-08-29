@@ -56,13 +56,10 @@ import org.openjdk.jmh.annotations.*
   * On the read side `decodeDirect` is ScalaPB's own `parseFrom(Array[Byte])`,
   * which is a `CodedInputStream` over the array and then the generated parser.
   * `decodeB8` reaches the same parser over the same bytes and adds a
-  * `ByteSource`, a `setRecursionLimit` call, a `Right` and a `catch` for
-  * `InvalidProtocolBufferException` that valid input never reaches. All four
-  * are constant and none of them touches a field, so the two decode numbers
-  * should be close to identical; a visible gap would mean something other than
-  * the facade is being measured. The recursion limit in particular buys no work
-  * per message and no safety either — ScalaPB does not consult it, as
-  * `b8.scalapb.decoder` says at length.
+  * `ByteSource`, a `Right` and a `catch` for `InvalidProtocolBufferException`
+  * that valid input never reaches. All three are constant and none of them
+  * touches a field, so the two decode numbers should be close to identical; a
+  * visible gap would mean something other than the facade is being measured.
   *
   * All five methods return their result rather than dropping it, which is what
   * keeps JMH from folding the work away. No `Blackhole` anywhere: mixing the
@@ -84,12 +81,12 @@ class ScalapbBench:
   /** The bridge instance, built once, over the message type the direct
     * benchmarks run.
     *
-    * A `val` on purpose: `b8.scalapb`'s given takes the two protobuf settings,
-    * so it is a `def`, and summoning it at the call site would build a fresh
-    * `ScalapbCodec` on every invocation and charge the facade for an allocation
-    * no real caller makes.
+    * A `val` on purpose: `b8.scalapb`'s given is parameterised — `[A]` plus a
+    * `using GeneratedMessageCompanion[A]` — so it is a `def`, and summoning it
+    * at the call site would build a fresh `ScalapbCodec` on every invocation
+    * and charge the facade for an allocation no real caller makes.
     */
-  private given b8Codec: Codec[PNested, Proto] = b8.scalapb.codec()
+  private given b8Codec: Codec[PNested, Proto] = b8.scalapb.codec
 
   /** One reusable sink per thread, for `encodeB8Pooled` only. Passed explicitly
     * rather than put in scope, so that `encodeB8` keeps the default unpooled
@@ -165,10 +162,10 @@ class ScalapbBench:
     PNested.parseFrom(bytes)
 
   /** The same parser over the same bytes, through the array facade. The extra
-    * work against `decodeDirect` is a `ByteSource`, a recursion limit ScalaPB
-    * ignores, an `Either` and the translation of an
-    * `InvalidProtocolBufferException` into a `DecodeError` — and the last of
-    * those only on the failing path, which this benchmark never takes.
+    * work against `decodeDirect` is a `ByteSource`, an `Either` and the
+    * translation of an `InvalidProtocolBufferException` into a `DecodeError` —
+    * and the last of those only on the failing path, which this benchmark never
+    * takes.
     */
   @Benchmark
   def decodeB8: Either[DecodeError, PNested] =

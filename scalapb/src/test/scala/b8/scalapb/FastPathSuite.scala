@@ -213,8 +213,8 @@ class FastPathSuite extends munit.FunSuite:
     // `sizeHint` override could be deleted — leaving `Encoder`'s inherited
     // 256, the guess this bridge exists not to make — and all of the rest
     // would still be green.
-    val enc = encoder[PNested]()
-    val dec = decoder[PNested]()
+    val enc = encoder[PNested]
+    val dec = decoder[PNested]
     assertEquals(enc.sizeHint(pNested1), pNested1.serializedSize)
     assert(enc.encode(pNested1).sameElements(plainNested))
     assertEquals(dec.decode(ByteSource(plainNested)), Right(pNested1))

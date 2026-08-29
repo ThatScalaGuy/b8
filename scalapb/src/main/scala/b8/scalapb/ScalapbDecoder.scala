@@ -28,16 +28,16 @@ import scalapb.GeneratedMessageCompanion
 
 /** The read half of the ScalaPB bridge for one type.
   *
-  * @param recursionLimit
-  *   protobuf's nesting bound, set on the stream before parsing; see
-  *   `b8.scalapb.decoder` for why ScalaPB does not act on it
+  * Holds nothing but the companion it parses through, and takes no settings;
+  * see `b8.scalapb.codec` for the two protobuf knobs that are deliberately not
+  * offered.
   */
-final class ScalapbDecoder[A <: GeneratedMessage](recursionLimit: Int)(using
+final class ScalapbDecoder[A <: GeneratedMessage](using
     cmp: GeneratedMessageCompanion[A]
 ) extends Decoder[A, Proto]:
 
   def decodeUnsafe(in: ByteSource): A =
-    ScalapbDecoder.decodeUnsafe(in, recursionLimit, cmp)
+    ScalapbDecoder.decodeUnsafe(in, cmp)
 
 object ScalapbDecoder:
 
@@ -58,17 +58,14 @@ object ScalapbDecoder:
     *
     * Anything else propagates unwrapped, which for ScalaPB is worth naming
     * rather than leaving to be discovered: nesting deep enough to exhaust the
-    * stack raises `StackOverflowError`, not a `DecodeError`. See
-    * `b8.scalapb.decoder` for why `recursionLimit` does not prevent that.
+    * stack raises `StackOverflowError`, not a `DecodeError`, and protobuf's own
+    * `setRecursionLimit` would not have prevented it — see `b8.scalapb.codec`.
     */
   private[scalapb] def decodeUnsafe[A <: GeneratedMessage](
       in: ByteSource,
-      recursionLimit: Int,
       cmp: GeneratedMessageCompanion[A]
   ): A =
     val cis = CodedInputStream.newInstance(in.array, in.offset, in.length)
-    // Hands back the limit it replaced, which nothing here has a use for.
-    val _ = cis.setRecursionLimit(recursionLimit)
     try cmp.parseFrom(cis)
     catch
       case e: InvalidProtocolBufferException =>

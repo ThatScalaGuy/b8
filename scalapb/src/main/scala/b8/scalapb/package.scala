@@ -29,62 +29,58 @@ import scalapb.GeneratedMessageCompanion
   * Needs no `GeneratedMessageCompanion`: writing a message asks only the value
   * itself, and every `GeneratedMessage` carries both `serializedSize` and
   * `writeTo`.
+  */
+def encoder[A <: GeneratedMessage]: Encoder[A, Proto] =
+  ScalapbEncoder()
+
+/** Builds the b8 Protobuf decoder for a ScalaPB message type. */
+def decoder[A <: GeneratedMessage](using
+    GeneratedMessageCompanion[A]
+): Decoder[A, Proto] =
+  ScalapbDecoder()
+
+/** Builds both directions at once.
   *
-  * @param deterministic
-  *   turns on protobuf's deterministic serialization for the write, and it is
-  *   worth being exact about what that buys behind ScalaPB, because today the
-  *   answer is nothing. The flag lives on the `CodedOutputStream` and is read
-  *   by protobuf-java's own map writer; ScalaPB-generated code does not go
-  *   through it. Its `writeTo` walks the Scala `Map` a map field is and never
-  *   asks the stream whether it was meant to be deterministic — checked against
-  *   the 0.11.20 generator, which mentions the flag nowhere. So two messages
-  *   that are `==` but whose maps were built in a different insertion order can
-  *   still encode to different bytes with this on. What holds either way is the
-  *   weaker property most callers actually want: one value encodes to the same
-  *   bytes every time, because one `Map` iterates the same way twice. The
-  *   parameter is here because it is the switch protobuf offers and because a
-  *   ScalaPB that started honouring it would need no change on this side — read
-  *   it as an intent, not as a guarantee, and do not hash or sign the bytes of
-  *   a message with a map field on the strength of it.
-  */
-def encoder[A <: GeneratedMessage](
-    deterministic: Boolean = false
-): Encoder[A, Proto] =
-  ScalapbEncoder(deterministic)
-
-/** Builds the b8 Protobuf decoder for a ScalaPB message type.
+  * There is nothing to configure here, which is worth an explanation rather
+  * than a shrug: protobuf offers exactly two knobs a reader will come looking
+  * for, and neither of them does anything behind ScalaPB.
   *
-  * @param recursionLimit
-  *   protobuf's bound on how deeply messages may nest, set on the
-  *   `CodedInputStream` before parsing. The same caveat as `deterministic`
-  *   applies and it is sharper here, so plainly: **ScalaPB does not enforce
-  *   this.** A nested message field is read through
-  *   `scalapb.LiteParser.readMessage`, which pushes a length limit and recurses
-  *   without touching protobuf's recursion counter, so nothing ever compares a
-  *   depth against this number. Input nested past what the JVM stack holds does
-  *   not come back as a `DecodeError`; it comes back as a `StackOverflowError`,
-  *   which `decode` does not catch and no `Try` would either. Against untrusted
-  *   input, bound the *length* instead: every level of nesting costs at least
-  *   two bytes on the wire, so a size cap is a depth cap. The parameter is set
-  *   for the same reason as the other one — it is protobuf's own knob, and it
-  *   costs one call.
+  * `CodedOutputStream.useDeterministicSerialization` is protobuf's switch for
+  * writing map entries in a stable order, and protobuf-java's own map writer
+  * reads it. ScalaPB-generated code never goes through that writer: a
+  * `map<string, string>` field is a Scala `Map`, and the generated `writeTo`
+  * iterates it directly and writes the entries in whatever order it gets them.
+  * Setting the flag changes no byte of the output, so exposing it would have
+  * been offering a guarantee the backend does not make. What a map field's
+  * order on the wire actually follows is the Scala `Map`'s iteration order,
+  * which is worse to depend on than it sounds: two messages that are `==` but
+  * whose maps were built in different insertion orders encode differently at
+  * four entries or fewer, where `Map1` to `Map4` keep insertion order, and
+  * identically from five on, where Scala switches to a hash-ordered `HashMap`.
+  * If the bytes have to be stable, compare or hash the parsed values, or carry
+  * the entries in a `repeated` field sorted by the sender.
+  *
+  * `CodedInputStream.setRecursionLimit` is protobuf's bound on nesting depth,
+  * and ScalaPB does not enforce that either: a nested message field is read
+  * through `scalapb.LiteParser.readMessage`, which pushes a length limit and
+  * then recurses without ever touching protobuf's recursion counter, so nothing
+  * compares a depth against the limit. Input nested past what the JVM stack
+  * holds raises a `StackOverflowError` — an `Error`, so neither `decode` nor a
+  * `Try` turns it into a value — and no limit set here would have stopped it.
+  * Bound the *length* of untrusted input instead: every level of nesting costs
+  * at least two bytes on the wire, a tag and a length, so a byte cap is a depth
+  * cap.
+  *
+  * Both facts are pinned by `ProtoSemanticsSuite`, so a ScalaPB release that
+  * starts honouring either one breaks a test and brings someone back to this
+  * paragraph.
   */
-def decoder[A <: GeneratedMessage](
-    recursionLimit: Int = 100
-)(using GeneratedMessageCompanion[A]): Decoder[A, Proto] =
-  ScalapbDecoder(recursionLimit)
+def codec[A <: GeneratedMessage](using
+    GeneratedMessageCompanion[A]
+): Codec[A, Proto] =
+  ScalapbCodec()
 
-/** Builds both directions at once. See `encoder` and `decoder` for the two
-  * parameters.
-  */
-def codec[A <: GeneratedMessage](
-    deterministic: Boolean = false,
-    recursionLimit: Int = 100
-)(using GeneratedMessageCompanion[A]): Codec[A, Proto] =
-  ScalapbCodec(deterministic, recursionLimit)
-
-/** Every ScalaPB message type gets the Protobuf bridge, with protobuf's own
-  * settings.
+/** Every ScalaPB message type gets the Protobuf bridge.
   *
   * One given, as in the jsoniter bridge and for the same reason: a generated
   * message and its companion arrive together, so ScalaPB has no write-only and
@@ -100,5 +96,4 @@ def codec[A <: GeneratedMessage](
   */
 given [A <: GeneratedMessage](using
     GeneratedMessageCompanion[A]
-): Codec[A, Proto] =
-  codec()
+): Codec[A, Proto] = codec

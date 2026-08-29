@@ -33,18 +33,17 @@ import scalapb.GeneratedMessage
   * retry path anywhere in this file. What is left is precisely the sequence
   * ScalaPB's own `toByteArray` runs, minus its array allocation.
   *
-  * @param deterministic
-  *   sets protobuf's deterministic-serialization flag on the stream; see
-  *   `b8.scalapb.encoder` for what that does and does not buy behind ScalaPB
+  * Carries no state and takes no settings, so one instance behaves exactly like
+  * the next; see `b8.scalapb.codec` for the two protobuf knobs that are
+  * deliberately not offered.
   */
-final class ScalapbEncoder[A <: GeneratedMessage](deterministic: Boolean)
-    extends Encoder[A, Proto]:
+final class ScalapbEncoder[A <: GeneratedMessage] extends Encoder[A, Proto]:
 
   /** Exact, not a guess, and free after the first call on an instance. */
   override def sizeHint(a: A): Int = a.serializedSize
 
   def encodeTo(a: A, out: ByteSink): Unit =
-    ScalapbEncoder.encodeTo(a, out, deterministic)
+    ScalapbEncoder.encodeTo(a, out)
 
 object ScalapbEncoder:
 
@@ -69,15 +68,13 @@ object ScalapbEncoder:
     */
   private[scalapb] def encodeTo[A <: GeneratedMessage](
       a: A,
-      out: ByteSink,
-      deterministic: Boolean
+      out: ByteSink
   ): Unit =
     out match
       case s: ArraySink =>
         val n = a.serializedSize
         s.ensure(n)
         val cos = CodedOutputStream.newInstance(s.buffer, s.position, n)
-        if deterministic then cos.useDeterministicSerialization()
         a.writeTo(cos)
         cos.checkNoSpaceLeft()
         s.advance(n)
@@ -86,6 +83,5 @@ object ScalapbEncoder:
           other.asOutputStream,
           math.min(a.serializedSize, CodedOutputStream.DEFAULT_BUFFER_SIZE)
         )
-        if deterministic then cos.useDeterministicSerialization()
         a.writeTo(cos)
         cos.flush()

@@ -30,23 +30,16 @@ import scalapb.GeneratedMessageCompanion
   * `ScalapbDecoder` through `Codec.from`, which would put a forwarding call in
   * front of every encode and every decode for no gain. The bodies are the same
   * ones the two one-way classes run.
-  *
-  * @param deterministic
-  *   sets protobuf's deterministic-serialization flag on the stream
-  * @param recursionLimit
-  *   protobuf's nesting bound, set on the stream before parsing
   */
-final class ScalapbCodec[A <: GeneratedMessage](
-    deterministic: Boolean,
-    recursionLimit: Int
-)(using cmp: GeneratedMessageCompanion[A])
-    extends Codec[A, Proto]:
+final class ScalapbCodec[A <: GeneratedMessage](using
+    cmp: GeneratedMessageCompanion[A]
+) extends Codec[A, Proto]:
 
   /** Exact, not a guess; see `ScalapbEncoder`. */
   override def sizeHint(a: A): Int = a.serializedSize
 
   def encodeTo(a: A, out: ByteSink): Unit =
-    ScalapbEncoder.encodeTo(a, out, deterministic)
+    ScalapbEncoder.encodeTo(a, out)
 
   def decodeUnsafe(in: ByteSource): A =
-    ScalapbDecoder.decodeUnsafe(in, recursionLimit, cmp)
+    ScalapbDecoder.decodeUnsafe(in, cmp)
