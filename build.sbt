@@ -36,13 +36,6 @@ ThisBuild / scalacOptions ++= Seq(
   "-Wunused:all"
 )
 
-// `b8-fs2` is still a bare `package.scala`. An empty compilation unit carries no
-// dependency information, which the compiler warns about and CI turns into an
-// error — silence it until the module grows its first definition.
-lazy val stubSettings = Seq(
-  scalacOptions += "-Wconf:msg=defined in the compilation unit:s"
-)
-
 lazy val root = project
   .in(file("."))
   .enablePlugins(NoPublishPlugin)
@@ -77,12 +70,28 @@ lazy val core = project
 
 lazy val fs2 = project
   .in(file("fs2"))
-  .dependsOn(core, laws % "test->compile")
+  // `jsoniter % Test` is for the tests only, exactly as in `scodec`: the
+  // container and the pipes have to work with an ordinary bridge in scope, and
+  // running the shared fixtures through one is what shows it.
+  // `scalapb % "test->test"` reaches the proto classes generated for that
+  // module's tests, which is what the varint framing is held against — the same
+  // messages ScalaPB's own `writeDelimitedTo` produces, so the interop test
+  // compares b8 against protobuf rather than against itself. Test-scoped, so
+  // neither is ever on a consumer's compile classpath. The module itself knows
+  // no backend and no format.
+  .dependsOn(
+    core,
+    jsoniter % Test,
+    scalapb % "test->test",
+    laws % "test->compile"
+  )
   .settings(
     name := "b8-fs2",
-    stubSettings,
     libraryDependencies ++= Seq(
-      "co.fs2" %% "fs2-core" % V.fs2
+      "co.fs2" %% "fs2-core" % V.fs2,
+      // Only the tests derive codecs; neither the container nor the pipes ever
+      // need them.
+      "com.github.plokhotnyuk.jsoniter-scala" %% "jsoniter-scala-macros" % V.jsoniter % Test
     ),
     Test / fork := true
   )
@@ -233,6 +242,7 @@ lazy val benchmarks = project
   // publishes nothing: those classes are in no jar a consumer could resolve.
   .dependsOn(
     core,
+    fs2,
     scodec,
     jsoniter,
     circe,
@@ -263,7 +273,15 @@ lazy val docs = project
   // Same `compile->test` as the benchmarks, and for the same reason: the
   // ScalaPB page's snippets need a generated message, and b8's own test protos
   // are the only ones in the build. This module publishes nothing either.
-  .dependsOn(core, scodec, jsoniter, circe, borer, scalapb % "compile->test")
+  .dependsOn(
+    core,
+    fs2,
+    scodec,
+    jsoniter,
+    circe,
+    borer,
+    scalapb % "compile->test"
+  )
   .settings(
     name := "b8-docs",
     // The bridge pages are mdoc-verified, so the snippets need the bridges and

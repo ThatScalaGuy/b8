@@ -43,7 +43,7 @@ All AI-generated documents and code are reviewed by the maintainer before they a
 - 🧊 **No hidden pooling** — every `encode` allocates a fresh buffer unless you opt into `SinkPool.threadLocal()`
 - 🎯 **Errors at the boundary** — exceptions inside the hot path, one `Either[DecodeError, A]` per message at the edge
 - 🔌 **Bring your own format** — `Format` and its tags are plain traits, so a private wire format is a one-liner
-- 🧵 **`ByteVector` today** — `b8-scodec` gives you `scodec.bits.ByteVector` as a target container; `b8-fs2` will add `Chunk[Byte]` and framing pipes, and is still a stub
+- 🧵 **Three containers** — `Array[Byte]` in the core, `scodec.bits.ByteVector` from `b8-scodec`, `fs2.Chunk[Byte]` from `b8-fs2` — which also brings the encode/decode pipes and the message framing no backend provides
 - 📐 **Law-checked backends** — every bridge is held to the same suite in `b8-laws` before it counts as one
 
 ## 🧩 Compatibility
@@ -138,12 +138,14 @@ Switching the target container is one import as well:
 ```scala
 import b8.vector.* // scodec.bits.ByteVector, from b8-scodec
 // or b8.chunk.*   — fs2.Chunk[Byte], from b8-fs2
+// or b8.array.*   — Array[Byte], from b8-core
 ```
 
 One at a time, though: the container packages declare the same four names, so importing two of them in one
 file is a compile error by design — one container per file, the same rule as one backend per format.
-`b8-scodec` is the one that exists today, and [docs/scodec.md](docs/scodec.md) covers what a `ByteVector`
-costs on each side and when to `compact` one.
+[docs/scodec.md](docs/scodec.md) covers what a `ByteVector` costs on each side and when to `compact` one;
+[docs/fs2.md](docs/fs2.md) does the same for `Chunk[Byte]` and goes on to the streaming half of that
+module, where `b8.stream` frames values into a byte stream and reads them back.
 
 ### Writing into a buffer you own
 
@@ -216,13 +218,13 @@ b8
 | `b8-circe`       | `b8.circe`              | circe behind `Format.Json` — the compatibility bridge                   | ✅ implemented — [docs](docs/circe.md) |
 | `b8-borer`       | `b8.borer`              | borer behind `Format.Cbor` and `Format.Json`                            | ✅ implemented — [docs](docs/borer.md) |
 | `b8-scalapb`     | `b8.scalapb`            | ScalaPB behind `Format.Proto`                                           | ✅ implemented — [docs](docs/scalapb.md) |
-| `b8-fs2`         | `b8.chunk`, `b8.stream` | `fs2.Chunk[Byte]` as a container, plus encode/decode pipes and framing   | 🚧 stub                       |
+| `b8-fs2`         | `b8.chunk`, `b8.stream` | `fs2.Chunk[Byte]` as a container, plus encode/decode pipes and framing   | ✅ implemented — [docs](docs/fs2.md) |
 | `b8-scodec`      | `b8.vector`             | `scodec.bits.ByteVector` as a container                                 | ✅ implemented — [docs](docs/scodec.md) |
 | `b8-benchmarks`  | `b8.benchmarks`         | JMH, measures the façade overhead against a direct backend call         | 🔒 not published              |
 | `b8-docs`        | —                       | mdoc + Laika, sources in `docs/`                                        | 🔒 not published              |
 
-`b8-fs2` is already wired into the build and waiting for its bridge. `b8-core` never gains a dependency,
-so adding one of the others never drags a parser into a module that does not want it.
+`b8-core` never gains a dependency, so adding one of the others never drags a parser into a module that
+does not want it.
 
 ## 🧪 Testing
 

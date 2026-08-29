@@ -360,9 +360,10 @@ into a stream needs a length prefix of its own.
 
 For a single message written to or read from a stream, ScalaPB already has the standard answer:
 `writeDelimitedTo` and `parseDelimitedFrom` write and read a varint length in front of the message, which
-is the same framing protobuf's other implementations use. For a pipe of them, that belongs in `b8-fs2`,
-which is a stub today. Either way it does not belong in the bridge, which deliberately frames nothing: it
-writes the message and stops.
+is the same framing protobuf's other implementations use. For a pipe of them, that is what
+[`b8-fs2`](fs2.md) is for: `b8.stream.encode[Format.Proto](Framing.Varint)` writes exactly those bytes and
+`decode` reads them back, in either direction against ScalaPB's own two methods. Either way it does not
+belong in the bridge, which deliberately frames nothing: it writes the message and stops.
 
 ## When to use it
 
